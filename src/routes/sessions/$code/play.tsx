@@ -1,0 +1,501 @@
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useSuspenseQuery } from '@tanstack/react-query';
+import { convexQuery } from '@convex-dev/react-query';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
+import { useState, useEffect } from 'react';
+import { Button } from '~/components/ui/button';
+import { ThemeToggle } from '~/components/ThemeToggle';
+
+export const Route = createFileRoute('/sessions/$code/play')({
+  component: ParticipantView,
+  loader: async ({ context, params }) => {
+    const { queryClient } = context;
+    await queryClient.ensureQueryData(
+      convexQuery(api.quizzes.getSession, { code: params.code }),
+    );
+  },
+});
+
+function ParticipantView() {
+  const { code } = Route.useParams();
+  const [name, setName] = useState('');
+  const [participantId, setParticipantId] = useState<string | null>(null);
+  const [hasAnswered, setHasAnswered] = useState(false);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+
+  const joinSession = useMutation(api.quizzes.joinSession);
+  const submitAnswer = useMutation(api.quizzes.submitAnswer);
+
+  const { data: session } = useSuspenseQuery(
+    convexQuery(api.quizzes.getSession, { code }),
+  );
+
+  const currentQuestion = useQuery(
+    api.quizzes.getCurrentQuestion,
+    session && (session.status === 'active' || session.status === 'showing_results') ? { sessionId: session._id } : 'skip',
+  );
+
+  const myResponses = useQuery(
+    api.quizzes.getParticipantResponses,
+    participantId && session
+      ? {
+          participantId,
+          sessionId: session._id,
+        }
+      : 'skip',
+  );
+
+  const responses = useQuery(
+    api.quizzes.getSessionResponses,
+    session && currentQuestion
+      ? {
+          sessionId: session._id,
+          questionId: currentQuestion._id,
+        }
+      : 'skip',
+  );
+
+  // Check if participant has already answered current question
+  useEffect(() => {
+    if (participantId && currentQuestion && myResponses) {
+      const answered = myResponses.some(
+        (r) => r.questionId === currentQuestion._id,
+      );
+      setHasAnswered(answered);
+      if (answered) {
+        const myResponse = myResponses.find(
+          (r) => r.questionId === currentQuestion._id,
+        );
+        if (myResponse) {
+          setSelectedAnswer(myResponse.answerId);
+        }
+      } else {
+        setSelectedAnswer(null);
+      }
+    }
+  }, [participantId, currentQuestion, myResponses]);
+
+  // Reset answered state when question changes
+  useEffect(() => {
+    setHasAnswered(false);
+    setSelectedAnswer(null);
+  }, [currentQuestion?._id]);
+
+  const handleJoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !session) return;
+
+    try {
+      const result = await joinSession({
+        sessionId: session._id,
+        name: name.trim(),
+      });
+      setParticipantId(result.participantId);
+    } catch (error: any) {
+      console.error('Error joining session:', error);
+      alert(error.message || 'Failed to join session');
+    }
+  };
+
+  const handleAnswerSelect = async (answerId: string) => {
+    if (hasAnswered || !session || !currentQuestion || !participantId) {
+      return;
+    }
+
+    setSelectedAnswer(answerId);
+
+    try {
+      await submitAnswer({
+        sessionId: session._id,
+        questionId: currentQuestion._id,
+        participantId,
+        answerId: answerId,
+      });
+      setHasAnswered(true);
+    } catch (error: any) {
+      console.error('Error submitting answer:', error);
+      alert(error.message || 'Failed to submit answer');
+      setSelectedAnswer(null);
+    }
+  };
+
+  if (!session) {
+    return (
+      <div className="p-8 text-center">
+        <p>Session not found</p>
+        <Link to="/" className="text-blue-600 underline">
+          Go home
+        </Link>
+      </div>
+    );
+  }
+
+  // Not joined yet
+  if (!participantId) {
+    return (
+      <>
+        <header className="sticky top-0 z-10 bg-background p-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center">
+          <Link to="/" className="text-xl font-bold">
+            Enkelvolt
+          </Link>
+        </header>
+        <main className="p-8 max-w-2xl mx-auto">
+          <div className="border rounded-lg p-6 bg-white dark:bg-gray-900">
+            <h1 className="text-3xl font-bold mb-2">{session.quiz.title}</h1>
+            <p className="text-2xl font-semibold text-blue-600 dark:text-blue-400 mb-6">
+              {code}
+            </p>
+            <form onSubmit={handleJoin} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Enter your name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full px-4 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700"
+                  required
+                  maxLength={50}
+                />
+              </div>
+              <Button
+                type="submit"
+                className="bg-green-500 text-white hover:bg-green-600"
+              >
+                Join Quiz
+              </Button>
+            </form>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  // Waiting for session to start
+  if (session.status === 'waiting') {
+    return (
+      <>
+        <header className="sticky top-0 z-10 bg-background p-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center">
+          <Link to="/" className="text-xl font-bold">
+            Enkelvolt
+          </Link>
+        </header>
+        <main className="p-8 max-w-2xl mx-auto">
+          <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 text-center">
+            <h1 className="text-3xl font-bold mb-4">{session.quiz.title}</h1>
+            <p className="text-xl mb-2">Waiting for host to start the quiz...</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              You're all set! The quiz will begin soon.
+            </p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  // Session finished
+  if (session.status === 'finished') {
+    return (
+      <>
+        <header className="sticky top-0 z-10 bg-background p-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center">
+          <Link to="/" className="text-xl font-bold">
+            Enkelvolt
+          </Link>
+        </header>
+        <main className="p-8 max-w-2xl mx-auto">
+          <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 text-center">
+            <h1 className="text-3xl font-bold mb-4">Quiz Finished!</h1>
+            <p className="mb-4">Thank you for participating!</p>
+            <Link
+              to="/"
+              className="text-blue-600 hover:text-blue-800 dark:text-blue-400"
+            >
+              Go back to home
+            </Link>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  // Showing results
+  if (session.status === 'showing_results') {
+    // Get the participant's answer for the current question
+    const myResponseForCurrentQuestion = myResponses?.find(
+      (r) => r.questionId === currentQuestion?._id,
+    );
+    const selectedAnswerData = currentQuestion?.answers.find(
+      (a) => a._id === myResponseForCurrentQuestion?.answerId,
+    );
+    const isCorrect = selectedAnswerData?.isCorrect ?? false;
+    const selectedAnswerText = selectedAnswerData?.text || '';
+
+    // If question not loaded yet, show loading
+    if (!currentQuestion) {
+      return (
+        <>
+          <header className="h-14 sm:h-16 bg-background px-3 sm:px-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center shrink-0">
+            <Link to="/" className="text-base sm:text-lg font-bold">
+              Enkelvolt
+            </Link>
+            <div className="flex items-center gap-2">
+              <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                {session.currentQuestionIndex + 1}/{session.questionCount}
+              </div>
+              <ThemeToggle />
+            </div>
+          </header>
+          <main className="h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
+            <div className="flex-1 flex items-center justify-center px-4">
+              <div className="max-w-2xl w-full text-center">
+                <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400">
+                  Loading results...
+                </p>
+              </div>
+            </div>
+          </main>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <header className="h-14 sm:h-16 bg-background px-3 sm:px-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center shrink-0">
+          <Link to="/" className="text-base sm:text-lg font-bold">
+            Enkelvolt
+          </Link>
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+            {session.currentQuestionIndex + 1}/{session.questionCount}
+          </div>
+        </header>
+        <main className="h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
+          <div
+            className={`flex-1 flex items-center justify-center px-4 sm:px-6 md:px-8 ${
+              isCorrect
+                ? 'bg-gradient-to-br from-green-500 to-green-600'
+                : 'bg-gradient-to-br from-red-500 to-red-600'
+            }`}
+          >
+            <div className="max-w-3xl w-full text-center text-white">
+              {/* Icon */}
+              <div className="mb-6 sm:mb-8 flex justify-center">
+                <div
+                  className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full ${
+                    isCorrect
+                      ? 'bg-white/20 backdrop-blur-sm'
+                      : 'bg-white/20 backdrop-blur-sm'
+                  } flex items-center justify-center`}
+                >
+                  {isCorrect ? (
+                    <svg
+                      className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  )}
+                </div>
+              </div>
+
+              {/* Main message */}
+              <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 drop-shadow-lg">
+                {isCorrect
+                  ? 'Congratulations!'
+                  : 'Oh no!'}
+              </h2>
+
+              {/* Sub message */}
+              <p className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold mb-2 sm:mb-3 drop-shadow-md">
+                {isCorrect
+                  ? 'You answered right!'
+                  : `You answered ${selectedAnswerText}`}
+              </p>
+
+              {/* Additional info */}
+              {!isCorrect && (
+                <p className="text-lg sm:text-xl md:text-2xl opacity-90 mt-4 sm:mt-6 drop-shadow-sm">
+                  That wasn't the correct answer
+                </p>
+              )}
+
+              {/* Waiting message */}
+              <div className="mt-8 sm:mt-10 md:mt-12 pt-6 sm:pt-8 border-t border-white/30">
+                <p className="text-base sm:text-lg md:text-xl opacity-90 drop-shadow-sm">
+                  Next question starting soon...
+                </p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  // Active session - show question
+  if (!currentQuestion) {
+    return (
+      <>
+        <header className="sticky top-0 z-10 bg-background p-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center">
+          <Link to="/" className="text-xl font-bold">
+            Enkelvolt
+          </Link>
+        </header>
+        <main className="p-8 max-w-2xl mx-auto">
+          <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 text-center">
+            <p>Loading question...</p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  const selectedAnswerData = currentQuestion.answers.find(
+    (a) => a._id === selectedAnswer,
+  );
+  const isCorrect = selectedAnswerData?.isCorrect ?? false;
+
+  // Kahoot-style colors - vibrant and distinct
+  const kahootColors = [
+    {
+      bg: 'bg-[#4A90E2]', // Blue
+      hover: 'hover:bg-[#3A7BC8]',
+      text: 'text-white',
+      shadow: 'shadow-[#4A90E2]/50',
+    },
+    {
+      bg: 'bg-[#9013FE]', // Purple
+      hover: 'hover:bg-[#7A0FE8]',
+      text: 'text-white',
+      shadow: 'shadow-[#9013FE]/50',
+    },
+    {
+      bg: 'bg-[#50E3C2]', // Teal/Green
+      hover: 'hover:bg-[#40D3B2]',
+      text: 'text-white',
+      shadow: 'shadow-[#50E3C2]/50',
+    },
+    {
+      bg: 'bg-[#F5A623]', // Orange
+      hover: 'hover:bg-[#E59613]',
+      text: 'text-white',
+      shadow: 'shadow-[#F5A623]/50',
+    },
+    {
+      bg: 'bg-[#E94B3C]', // Red
+      hover: 'hover:bg-[#D93B2C]',
+      text: 'text-white',
+      shadow: 'shadow-[#E94B3C]/50',
+    },
+    {
+      bg: 'bg-[#7ED321]', // Green
+      hover: 'hover:bg-[#6EC311]',
+      text: 'text-white',
+      shadow: 'shadow-[#7ED321]/50',
+    },
+  ];
+
+  return (
+    <>
+      <header className="h-14 sm:h-16 bg-background px-3 sm:px-4 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center shrink-0">
+        <Link to="/" className="text-base sm:text-lg font-bold">
+          Enkelvolt
+        </Link>
+        <div className="flex items-center gap-2">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+            {session.currentQuestionIndex + 1}/{session.questionCount}
+          </div>
+          <ThemeToggle />
+        </div>
+      </header>
+      <main className="h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
+        {/* Answer Grid Section - Full height, no question visible */}
+        <div className="flex-1 px-3 sm:px-4 pb-3 sm:pb-4 overflow-auto flex items-center justify-center">
+          {hasAnswered ? (
+            <div className="max-w-4xl mx-auto w-full flex items-center justify-center">
+              <div className="p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl text-center w-full bg-blue-500 text-white">
+                <p className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
+                  Waiting for other players...
+                </p>
+                <p className="text-lg sm:text-xl md:text-2xl mb-2">
+                  You selected: {selectedAnswerData?.text}
+                </p>
+                <p className="mt-3 sm:mt-4 text-base sm:text-lg opacity-90">
+                  The host will show results soon
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto w-full h-full flex items-center justify-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full h-full auto-rows-fr">
+                {currentQuestion.answers.map((answer, index) => {
+                  const colors = kahootColors[index % kahootColors.length];
+                  const letter = String.fromCharCode(65 + index);
+
+                  return (
+                    <button
+                      key={answer._id}
+                      onClick={() => handleAnswerSelect(answer._id)}
+                      className={`
+                        ${colors.bg} ${colors.text} ${colors.hover}
+                        rounded-xl sm:rounded-2xl
+                        p-3 sm:p-4 md:p-5
+                        flex items-center justify-center
+                        transition-all duration-200
+                        transform hover:scale-[1.02] active:scale-[0.98]
+                        shadow-lg ${colors.shadow} hover:shadow-xl
+                        relative overflow-hidden
+                        group
+                        cursor-pointer
+                      `}
+                    >
+                      {/* Letter indicator */}
+                      <div className="absolute top-2 sm:top-3 left-3 sm:left-4">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                          <span className="text-base sm:text-lg md:text-xl font-bold">
+                            {letter}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Answer text */}
+                      <span className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-center px-6 sm:px-8 md:px-10 leading-tight">
+                        {answer.text}
+                      </span>
+
+                      {/* Hover effect overlay */}
+                      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors rounded-xl sm:rounded-2xl" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+    </>
+  );
+}
