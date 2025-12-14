@@ -1,6 +1,5 @@
 import { query, mutation } from './_generated/server';
 import { v } from 'convex/values';
-import { Id } from './_generated/dataModel';
 
 /**
  * Generate a unique 6-character alphanumeric code
@@ -184,6 +183,8 @@ export const getSessionParticipants = query({
       _id: v.id('participants'),
       sessionId: v.id('sessions'),
       name: v.string(),
+      avatar: v.optional(v.string()),
+      color: v.optional(v.string()),
       joinedAt: v.number(),
     }),
   ),
@@ -197,6 +198,8 @@ export const getSessionParticipants = query({
       _id: p._id,
       sessionId: p.sessionId,
       name: p.name,
+      avatar: p.avatar,
+      color: p.color,
       joinedAt: p.joinedAt,
     }));
   },
@@ -282,6 +285,8 @@ export const getSessionResponses = query({
       answeredAt: v.number(),
       participant: v.object({
         name: v.string(),
+        avatar: v.optional(v.string()),
+        color: v.optional(v.string()),
       }),
       answer: v.object({
         text: v.string(),
@@ -310,6 +315,8 @@ export const getSessionResponses = query({
           answeredAt: response.answeredAt,
           participant: {
             name: participant?.name ?? 'Unknown',
+            avatar: participant?.avatar ?? 'user',
+            color: participant?.color ?? '#4A90E2',
           },
           answer: {
             text: answer?.text ?? '',
@@ -463,6 +470,8 @@ export const joinSession = mutation({
   args: {
     sessionId: v.id('sessions'),
     name: v.string(),
+    avatar: v.string(),
+    color: v.string(),
   },
   returns: v.object({
     participantId: v.id('participants'),
@@ -481,6 +490,8 @@ export const joinSession = mutation({
     const participantId = await ctx.db.insert('participants', {
       sessionId: args.sessionId,
       name: args.name.trim(),
+      avatar: args.avatar,
+      color: args.color,
       joinedAt: now,
     });
 

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Button } from '~/components/ui/button';
+import { ThemeToggle } from '~/components/ThemeToggle';
 
 export const Route = createFileRoute('/quizzes/create')({
   component: CreateQuiz,
@@ -144,7 +145,8 @@ function CreateQuiz() {
 
       navigate({
         to: '/quizzes/$quizId',
-        params: { quizId: result.quizId },
+        params: { quizId: result.quizId } as any,
+        search: {} as any,
       });
     } catch (error) {
       console.error('Error creating quiz:', error);
@@ -315,7 +317,7 @@ function CreateQuiz() {
           <div className="flex gap-4 justify-end">
             <Button
               type="button"
-              onClick={() => navigate({ to: '/' })}
+              onClick={() => navigate({ to: '/', params: {} as any, search: {} as any })}
               variant="outline"
             >
               Cancel

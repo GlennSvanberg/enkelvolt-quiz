@@ -28,6 +28,8 @@ export default defineSchema({
   participants: defineTable({
     sessionId: v.id('sessions'),
     name: v.string(),
+    avatar: v.optional(v.string()),
+    color: v.optional(v.string()),
     joinedAt: v.number(),
   }).index('by_session', ['sessionId']),
   responses: defineTable({

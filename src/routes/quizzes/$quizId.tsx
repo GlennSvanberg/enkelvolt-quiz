@@ -9,7 +9,7 @@ import { ThemeToggle } from '~/components/ThemeToggle';
 export const Route = createFileRoute('/quizzes/$quizId')({
   component: QuizDetail,
   loader: async ({ context, params }) => {
-    const { queryClient } = context;
+    const { queryClient } = context as { queryClient: any };
     await queryClient.ensureQueryData(
       convexQuery(api.quizzes.getQuiz, { quizId: params.quizId as any }),
     );
@@ -30,7 +30,8 @@ function QuizDetail() {
       const result = await createSession({ quizId: quizId as any });
       navigate({
         to: '/sessions/$code/host',
-        params: { code: result.code },
+        params: { code: result.code } as any,
+        search: {} as any,
       });
     } catch (error) {
       console.error('Error creating session:', error);

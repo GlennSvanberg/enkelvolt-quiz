@@ -3,15 +3,32 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Button } from '~/components/ui/button';
 import { Leaderboard } from '~/components/Leaderboard';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import { Copy, Check } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  User,
+  Star,
+  Heart,
+  Zap,
+  Trophy,
+  Crown,
+  Rocket,
+  Gamepad2,
+  Music,
+  Sparkles,
+  Flame,
+  Shield,
+  type LucideIcon,
+} from 'lucide-react';
 
 export const Route = createFileRoute('/sessions/$code/host')({
   component: HostView,
   loader: async ({ context, params }) => {
-    const { queryClient } = context;
+    const { queryClient } = context as { queryClient: any };
     await queryClient.ensureQueryData(
       convexQuery(api.quizzes.getSession, { code: params.code }),
     );
@@ -23,7 +40,6 @@ function HostView() {
   const startSession = useMutation(api.quizzes.startSession);
   const showResults = useMutation(api.quizzes.showResults);
   const nextQuestion = useMutation(api.quizzes.nextQuestion);
-  const endSession = useMutation(api.quizzes.endSession);
 
   const { data: session } = useSuspenseQuery(
     convexQuery(api.quizzes.getSession, { code }),
@@ -55,6 +71,36 @@ function HostView() {
   );
 
   const [copied, setCopied] = useState(false);
+  const [animations, setAnimations] = useState<
+    Array<{
+      id: string;
+      name: string;
+      avatar: string;
+      color: string;
+      startTime: number;
+      startX: number;
+      startY: number;
+      side: 'left' | 'right';
+    }>
+  >([]);
+  const [progressBarBounce, setProgressBarBounce] = useState(false);
+  const previousResponseIds = useRef<Set<string>>(new Set());
+  const progressBarRef = useRef<HTMLDivElement>(null);
+
+  const avatarIconMap: Record<string, LucideIcon> = {
+    user: User,
+    star: Star,
+    heart: Heart,
+    zap: Zap,
+    trophy: Trophy,
+    crown: Crown,
+    rocket: Rocket,
+    gamepad: Gamepad2,
+    music: Music,
+    sparkles: Sparkles,
+    flame: Flame,
+    shield: Shield,
+  };
 
   useEffect(() => {
     if (copied) {
@@ -63,9 +109,81 @@ function HostView() {
     }
   }, [copied]);
 
+  // Detect new responses and trigger animations
+  useEffect(() => {
+    if (
+      !responses ||
+      session?.status !== 'active' ||
+      !currentQuestion
+    ) {
+      previousResponseIds.current = new Set();
+      return;
+    }
+
+    const currentResponseIds = new Set(responses.map((r) => r._id));
+    const newResponses = responses.filter(
+      (r) => !previousResponseIds.current.has(r._id),
+    );
+
+    if (newResponses.length > 0) {
+      newResponses.forEach((response, index) => {
+        const animationId = `${response._id}-${Date.now()}-${index}`;
+        // Random side (left or right)
+        const side = Math.random() > 0.5 ? 'right' : 'left';
+        // Random starting position: diagonal down from random height
+        const startX = side === 'right' ? window.innerWidth + 100 : -100;
+        const startY = Math.random() * (window.innerHeight * 0.4) + 50; // Random height in top 40% of screen
+        
+        setAnimations((prev) => [
+          ...prev,
+          {
+            id: animationId,
+            name: response.participant.name,
+            avatar: response.participant.avatar || 'user',
+            color: response.participant.color || '#4A90E2',
+            startTime: Date.now(),
+            startX,
+            startY,
+            side,
+          },
+        ]);
+
+        // Trigger progress bar bounce when badge lands (at ~60% of animation)
+        setTimeout(() => {
+          setProgressBarBounce(true);
+          setTimeout(() => setProgressBarBounce(false), 300);
+        }, 1200);
+
+        // Remove animation after it completes
+        setTimeout(() => {
+          setAnimations((prev) =>
+            prev.filter((a) => a.id !== animationId),
+          );
+        }, 2000);
+      });
+    }
+
+    previousResponseIds.current = currentResponseIds;
+  }, [responses, session?.status, currentQuestion]);
+
   const handleCopyCode = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
+  };
+
+  const getSessionUrl = () => {
+    // Use VITE_SITE_URL if set, otherwise fall back to window.location.origin
+    const baseUrl = 
+      (import.meta.env.VITE_SITE_URL as string | undefined) ||
+      (typeof window !== 'undefined' ? window.location.origin : '');
+    
+    if (!baseUrl) {
+      return '';
+    }
+    
+    // Ensure baseUrl doesn't end with a slash
+    const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+    return `${cleanBaseUrl}/sessions/${code}/play`;
   };
 
   const handleStart = async () => {
@@ -104,16 +222,6 @@ function HostView() {
     }
   };
 
-  const handleEndSession = async () => {
-    if (!session) return;
-    if (!confirm('Are you sure you want to end this session?')) return;
-    try {
-      await endSession({ sessionId: session._id });
-    } catch (error) {
-      console.error('Error ending session:', error);
-      alert('Failed to end session');
-    }
-  };
 
   if (!session) {
     return (
@@ -182,119 +290,232 @@ function HostView() {
   return (
     <>
       <header className="h-12 sm:h-14 bg-background px-2 sm:px-3 border-b-2 border-slate-200 dark:border-slate-800 flex flex-row justify-between items-center shrink-0">
-        <Link to="/" className="text-sm sm:text-base font-bold">
-          Enkelvolt
-        </Link>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {session.status === 'active' && (
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Link to="/" className="text-sm sm:text-base font-bold shrink-0">
+            Enkelvolt quiz:
+          </Link>
+          <h1 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate">
+            {session.quiz.title}
+          </h1>
+        </div>
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {(session.status === 'active' || session.status === 'showing_results' || session.status === 'waiting') && (
             <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
               {session.currentQuestionIndex + 1}/{session.questionCount}
             </div>
           )}
-          <div className="text-lg sm:text-xl md:text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {code}
-          </div>
           <ThemeToggle />
         </div>
       </header>
       <main className="h-[calc(100vh-3rem)] sm:h-[calc(100vh-3.5rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
         {/* Top Section - Quiz Info and Controls */}
-        <div className="px-2 sm:px-3 py-1.5 sm:py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
+        <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
           <div className="max-w-6xl mx-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate">
-                  {session.quiz.title}
-                </h1>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:inline">
-                    Share code
-                  </p>
-                  <Button
-                    onClick={handleCopyCode}
-                    variant="secondary"
-                    size="sm"
-                    className="cursor-pointer h-6 text-[10px] px-1.5"
-                  >
-                    {copied ? 'Copied!' : 'Copy'}
-                  </Button>
+            <div className="flex flex-row items-center justify-between gap-1.5 sm:gap-2 flex-nowrap">
+              <div className="flex items-center gap-2 shrink-0 min-w-0">
+                <div className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400 font-mono truncate">
+                  {code}
                 </div>
-                {session.status === 'active' && currentQuestion && (
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 font-medium">
-                        Progress: {totalResponses}/{totalParticipants} answered
-                      </span>
-                      <span className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 font-medium">
-                        {totalParticipants > 0 ? Math.round((totalResponses / totalParticipants) * 100) : 0}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 sm:h-2">
-                      <div
-                        className="bg-blue-500 h-1.5 sm:h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${totalParticipants > 0 ? (totalResponses / totalParticipants) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
+                <Button
+                  onClick={handleCopyCode}
+                  variant="ghost"
+                  size="icon"
+                  className="cursor-pointer h-7 w-7 shrink-0"
+                  aria-label={copied ? 'Copied!' : 'Copy code'}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
-              <div className="flex gap-1.5 sm:gap-2 shrink-0">
-                <div className="bg-white dark:bg-gray-900 rounded-md p-1.5 sm:p-2 border border-gray-200 dark:border-gray-800 min-w-[60px] sm:min-w-[70px]">
-                  <p className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">
-                    Participants
-                  </p>
-                  <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                    {totalParticipants}
-                  </p>
-                </div>
-                {session.status === 'active' && (
-                  <div className="bg-white dark:bg-gray-900 rounded-md p-1.5 sm:p-2 border border-gray-200 dark:border-gray-800 min-w-[60px] sm:min-w-[70px]">
-                    <p className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">
-                      Responses
+              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-nowrap">
+                <div className="flex gap-1 sm:gap-1.5 shrink-0">
+                  <div className="bg-white dark:bg-gray-900 rounded-md px-2 sm:px-3 py-1.5 border border-gray-200 dark:border-gray-800 flex items-center gap-1.5 shrink-0 h-fit">
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap leading-tight">
+                      Participants
                     </p>
-                    <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                      {totalResponses}
+                    <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-tight">
+                      {totalParticipants}
                     </p>
                   </div>
+                  {session.status === 'active' && (
+                    <div className="bg-white dark:bg-gray-900 rounded-md px-2 sm:px-3 py-1.5 border border-gray-200 dark:border-gray-800 flex items-center gap-1.5 shrink-0 h-fit">
+                      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 leading-tight">
+                        Responses
+                      </p>
+                      <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-tight">
+                        {totalResponses}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {/* Action Buttons */}
+                {session.status === 'active' && currentQuestion && (
+                  <Button
+                    onClick={handleShowResults}
+                    className="bg-blue-500 text-white hover:bg-blue-600 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg cursor-pointer shadow-lg shadow-blue-500/50 hover:shadow-xl transition-all shrink-0 whitespace-nowrap"
+                  >
+                    Show Results
+                  </Button>
+                )}
+                {session.status === 'showing_results' && currentQuestion && (
+                  <Button
+                    onClick={handleNextQuestion}
+                    className="bg-green-500 text-white hover:bg-green-600 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg cursor-pointer shadow-lg shadow-green-500/50 hover:shadow-xl transition-all shrink-0 whitespace-nowrap"
+                  >
+                    {session.currentQuestionIndex < session.questionCount - 1
+                      ? 'Next Question'
+                      : 'Finish Quiz'}
+                  </Button>
                 )}
               </div>
             </div>
+            {session.status === 'active' && currentQuestion && (
+              <div className="mt-2 relative" ref={progressBarRef}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
+                    {totalResponses}/{totalParticipants} answered
+                  </span>
+                  <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
+                    {totalParticipants > 0 ? Math.round((totalResponses / totalParticipants) * 100) : 0}%
+                  </span>
+                </div>
+                <div className={`w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 sm:h-2 transition-transform duration-300 ${progressBarBounce ? 'animate-progress-bounce' : ''}`}>
+                  <div
+                    className="bg-blue-500 h-1.5 sm:h-2 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${totalParticipants > 0 ? (totalResponses / totalParticipants) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+                
+                {/* Animated badges */}
+                {animations.map((animation) => {
+                  const AvatarIcon =
+                    avatarIconMap[animation.avatar] || User;
+                  const progressBarY = progressBarRef.current
+                    ? progressBarRef.current.getBoundingClientRect().top +
+                      progressBarRef.current.getBoundingClientRect().height / 2
+                    : 200;
+                  const endX = animation.side === 'right' 
+                    ? window.innerWidth * 0.3 
+                    : window.innerWidth * 0.7;
+                  const deltaX = endX - animation.startX;
+                  const deltaY = progressBarY - animation.startY;
+                  
+                  return (
+                    <div key={animation.id}>
+                      <div
+                        className="fixed z-50 animate-arch-landing"
+                        style={{
+                          left: `${animation.startX}px`,
+                          top: `${animation.startY}px`,
+                          '--delta-x': `${deltaX}px`,
+                          '--delta-y': `${deltaY}px`,
+                          '--color': animation.color,
+                        } as React.CSSProperties & {
+                          '--delta-x': string;
+                          '--delta-y': string;
+                          '--color': string;
+                        }}
+                      >
+                        <div
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-full shadow-lg text-white text-xs sm:text-sm font-medium whitespace-nowrap"
+                          style={{ backgroundColor: animation.color }}
+                        >
+                          <AvatarIcon className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                          <span>{animation.name}</span>
+                        </div>
+                      </div>
+                      {/* Explosion effect */}
+                      <div
+                        className="fixed z-40 animate-explosion"
+                        style={{
+                          left: `${endX}px`,
+                          top: `${progressBarY}px`,
+                          '--color': animation.color,
+                        } as React.CSSProperties & { '--color': string }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-hidden flex flex-col">
           {session.status === 'waiting' && (
-            <div className="flex-1 flex items-center justify-center px-4 overflow-auto">
-              <div className="max-w-2xl w-full text-center">
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
-                  Waiting for participants...
-                </h2>
+            <div className="flex-1 flex items-center justify-center px-4 overflow-auto py-6 sm:py-8">
+              <div className="max-w-4xl w-full">
+                {/* Main Focus: QR Code and Session Code */}
+                <div className="flex flex-col md:flex-row items-center justify-center gap-8 sm:gap-12 mb-8 sm:mb-12">
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center">
+                    <div className="bg-white dark:bg-gray-900 p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-800">
+                      <QRCodeSVG
+                        value={getSessionUrl()}
+                        size={280}
+                        level="H"
+                        includeMargin={false}
+                        className="w-[200px] h-[200px] sm:w-[240px] sm:h-[240px] md:w-[280px] md:h-[280px]"
+                      />
+                    </div>
+                    <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600 dark:text-gray-400 font-medium">
+                      Scan to join
+                    </p>
+                  </div>
+
+                  {/* Session Code - Large and Prominent */}
+                  <div className="flex flex-col items-center">
+                    <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-3 sm:mb-4 font-medium">
+                      Or enter code:
+                    </p>
+                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 text-white px-4 sm:px-6 md:px-8 py-3 sm:py-4 md:py-6 rounded-xl sm:rounded-2xl shadow-2xl border-2 sm:border-4 border-blue-300 dark:border-blue-500">
+                      <div className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold font-mono tracking-wider">
+                        {code}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Participants List */}
                 {participants && participants.length > 0 && (
-                  <div className="mb-4 sm:mb-6">
-                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2 sm:mb-3">
-                      Joined participants:
+                  <div className="mb-6 sm:mb-8">
+                    <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-3 sm:mb-4 text-center font-medium">
+                      Joined participants ({participants.length}):
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
-                      {participants.map((p) => (
-                        <span
-                          key={p._id}
-                          className="px-2 sm:px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs sm:text-sm font-medium"
-                        >
-                          {p.name}
-                        </span>
-                      ))}
+                      {participants.map((p) => {
+                        const AvatarIcon =
+                          avatarIconMap[p.avatar || 'user'] || User;
+                        return (
+                          <div
+                            key={p._id}
+                            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm sm:text-base font-medium text-white shadow-md"
+                            style={{ backgroundColor: p.color || '#4A90E2' }}
+                          >
+                            <AvatarIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span>{p.name}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
-                <Button
-                  onClick={handleStart}
-                  className="bg-green-500 text-white hover:bg-green-600 px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg font-bold rounded-2xl cursor-pointer shadow-lg shadow-green-500/50 hover:shadow-xl transition-all"
-                >
-                  Start Quiz
-                </Button>
+
+                {/* Start Quiz Button */}
+                <div className="text-center">
+                  <Button
+                    onClick={handleStart}
+                    className="bg-green-500 text-white hover:bg-green-600 px-8 sm:px-12 py-4 sm:py-6 text-lg sm:text-xl font-bold rounded-2xl cursor-pointer shadow-lg shadow-green-500/50 hover:shadow-xl transition-all"
+                  >
+                    Start Quiz
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -302,7 +523,7 @@ function HostView() {
           {session.status === 'active' && currentQuestion && (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Question Section - Top (50% height) */}
-              <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 border-b-2 border-gray-300 dark:border-gray-700">
+              <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4">
                 <div className="w-full max-w-4xl">
                   <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center text-gray-900 dark:text-white leading-tight px-2">
                     {currentQuestion.text}
@@ -311,9 +532,9 @@ function HostView() {
               </div>
 
               {/* Answer Responses Grid - Bottom (50% height) */}
-              <div className="flex-1 px-3 sm:px-4 pb-3 sm:pb-4 overflow-hidden">
+              <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden">
                 <div className="max-w-4xl mx-auto h-full flex flex-col">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 flex-1 auto-rows-fr min-h-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 auto-rows-fr min-h-0">
                     {currentQuestion.answers.map((answer, index) => {
                       const colors = kahootColors[index % kahootColors.length];
                       const letter = String.fromCharCode(65 + index);
@@ -323,48 +544,29 @@ function HostView() {
                           key={answer._id}
                           className={`
                             ${colors.bg} ${colors.text}
-                            rounded-lg sm:rounded-xl
-                            p-1 sm:p-1.5
+                            rounded-xl sm:rounded-2xl
+                            p-4 sm:p-6 md:p-8
                             relative overflow-hidden flex flex-col min-h-0
                           `}
                         >
                           {/* Letter indicator */}
-                          <div className="absolute top-0.5 left-1 sm:left-1.5">
-                            <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                              <span className="text-[9px] sm:text-[10px] font-bold">
+                          <div className="absolute top-2 left-3 sm:top-3 sm:left-4">
+                            <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                              <span className="text-xs sm:text-sm md:text-base font-bold">
                                 {letter}
                               </span>
                             </div>
                           </div>
 
                           {/* Answer text */}
-                          <div className="mt-3 sm:mt-3.5 mb-0.5 flex-1 min-h-0 flex items-center justify-center">
-                            <span className="text-[10px] sm:text-[11px] font-bold block text-center leading-tight">
+                          <div className="flex-1 min-h-0 flex items-center justify-center">
+                            <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold block text-center leading-tight">
                               {answer.text}
                             </span>
                           </div>
                         </div>
                       );
                     })}
-                  </div>
-
-                  {/* Control Buttons */}
-                  <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:mt-4 shrink-0 justify-end">
-                    {session.currentQuestionIndex < session.questionCount - 1 ? (
-                      <Button
-                        onClick={handleShowResults}
-                        className="bg-blue-500 text-white hover:bg-blue-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl cursor-pointer shadow-lg shadow-blue-500/50 hover:shadow-xl transition-all flex-1 sm:flex-none"
-                      >
-                        Show Results
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={handleShowResults}
-                        className="bg-blue-500 text-white hover:bg-blue-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl cursor-pointer shadow-lg shadow-blue-500/50 hover:shadow-xl transition-all flex-1 sm:flex-none"
-                      >
-                        Show Results
-                      </Button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -374,7 +576,7 @@ function HostView() {
           {session.status === 'showing_results' && currentQuestion && (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Question Section - Top (50% height) */}
-              <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 border-b-2 border-gray-300 dark:border-gray-700">
+              <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4">
                 <div className="w-full max-w-4xl">
                   <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center text-gray-900 dark:text-white leading-tight px-2">
                     {currentQuestion.text}
@@ -383,9 +585,9 @@ function HostView() {
               </div>
 
               {/* Results Section - Bottom (50% height) */}
-              <div className="flex-1 px-3 sm:px-4 pb-3 sm:pb-4 overflow-hidden">
+              <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden">
                 <div className="max-w-4xl mx-auto h-full flex flex-col">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 flex-1 auto-rows-fr min-h-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 auto-rows-fr min-h-0">
                     {responseCounts.map((item, index) => {
                       const colors = kahootColors[index % kahootColors.length];
                       const letter = String.fromCharCode(65 + index);
@@ -399,16 +601,16 @@ function HostView() {
                           key={item.answerId}
                           className={`
                             ${colors.bg} ${colors.text}
-                            rounded-lg sm:rounded-xl
-                            p-2 sm:p-3
+                            rounded-xl sm:rounded-2xl
+                            p-4 sm:p-6 md:p-8
                             relative overflow-hidden flex flex-col min-h-0
                             ${item.isCorrect ? 'ring-4 ring-green-400 ring-offset-2 dark:ring-offset-gray-950' : ''}
                           `}
                         >
                           {/* Letter indicator */}
-                          <div className="absolute top-1 left-2 sm:left-2.5">
-                            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                              <span className="text-[10px] sm:text-xs font-bold">
+                          <div className="absolute top-2 left-3 sm:top-3 sm:left-4">
+                            <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                              <span className="text-xs sm:text-sm md:text-base font-bold">
                                 {letter}
                               </span>
                             </div>
@@ -416,9 +618,9 @@ function HostView() {
 
                           {/* Correct answer indicator */}
                           {item.isCorrect && (
-                            <div className="absolute top-1 right-2 sm:right-2.5">
-                              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-400 flex items-center justify-center">
-                                <span className="text-xs sm:text-sm font-bold text-white">
+                            <div className="absolute top-2 right-3 sm:top-3 sm:right-4">
+                              <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-green-400 flex items-center justify-center">
+                                <span className="text-sm sm:text-base md:text-lg font-bold text-white">
                                   ✓
                                 </span>
                               </div>
@@ -426,25 +628,25 @@ function HostView() {
                           )}
 
                           {/* Answer text */}
-                          <div className="mt-4 sm:mt-5 mb-1 flex-1 min-h-0">
-                            <span className="text-xs sm:text-sm font-bold block mb-1 leading-tight">
+                          <div className="flex-1 min-h-0 flex items-center justify-center mb-2">
+                            <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold block text-center leading-tight">
                               {item.text}
                             </span>
                           </div>
 
                           {/* Response count and bar */}
-                          <div className="mt-auto pt-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm sm:text-base font-bold">
+                          <div className="mt-auto pt-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-base sm:text-lg md:text-xl font-bold">
                                 {item.count} {item.count === 1 ? 'vote' : 'votes'}
                               </span>
-                              <span className="text-xs sm:text-sm opacity-90">
+                              <span className="text-sm sm:text-base md:text-lg opacity-90 font-semibold">
                                 {Math.round(percentage)}%
                               </span>
                             </div>
-                            <div className="w-full bg-white/20 rounded-full h-1 sm:h-1.5 backdrop-blur-sm">
+                            <div className="w-full bg-white/20 rounded-full h-2 sm:h-2.5 backdrop-blur-sm">
                               <div
-                                className="h-1 sm:h-1.5 rounded-full bg-white/90 transition-all duration-500"
+                                className="h-2 sm:h-2.5 rounded-full bg-white/90 transition-all duration-500"
                                 style={{
                                   width: `${percentage}%`,
                                 }}
@@ -454,25 +656,6 @@ function HostView() {
                         </div>
                       );
                     })}
-                  </div>
-
-                  {/* Control Buttons */}
-                  <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:mt-4 shrink-0 justify-end">
-                    {session.currentQuestionIndex < session.questionCount - 1 ? (
-                      <Button
-                        onClick={handleNextQuestion}
-                        className="bg-green-500 text-white hover:bg-green-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl cursor-pointer shadow-lg shadow-green-500/50 hover:shadow-xl transition-all flex-1 sm:flex-none"
-                      >
-                        Continue to Next Question
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={handleNextQuestion}
-                        className="bg-green-500 text-white hover:bg-green-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl cursor-pointer shadow-lg shadow-green-500/50 hover:shadow-xl transition-all flex-1 sm:flex-none"
-                      >
-                        Finish Quiz
-                      </Button>
-                    )}
                   </div>
                 </div>
               </div>

@@ -37,7 +37,7 @@ export function getRouter() {
           {children}
         </ConvexProvider>
       ),
-    }),
+    }) as any,
     queryClient,
   )
 

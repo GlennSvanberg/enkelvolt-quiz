@@ -23,7 +23,8 @@ function Home() {
     if (quizCode.trim()) {
       navigate({
         to: '/sessions/$code/play',
-        params: { code: quizCode.trim().toUpperCase() },
+        params: { code: quizCode.trim().toUpperCase() } as any,
+        search: {} as any,
       });
     }
   };

@@ -3,26 +3,72 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
+import type { Id } from '../../../../convex/_generated/dataModel';
 import { useState, useEffect } from 'react';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import {
+  User,
+  Star,
+  Heart,
+  Zap,
+  Trophy,
+  Crown,
+  Rocket,
+  Gamepad2,
+  Music,
+  Sparkles,
+  Flame,
+  Shield,
+  type LucideIcon,
+} from 'lucide-react';
 
 export const Route = createFileRoute('/sessions/$code/play')({
   component: ParticipantView,
   loader: async ({ context, params }) => {
-    const { queryClient } = context;
+    const { queryClient } = context as { queryClient: any };
     await queryClient.ensureQueryData(
       convexQuery(api.quizzes.getSession, { code: params.code }),
     );
   },
 });
 
+const AVATAR_OPTIONS: { name: string; icon: LucideIcon }[] = [
+  { name: 'user', icon: User },
+  { name: 'star', icon: Star },
+  { name: 'heart', icon: Heart },
+  { name: 'zap', icon: Zap },
+  { name: 'trophy', icon: Trophy },
+  { name: 'crown', icon: Crown },
+  { name: 'rocket', icon: Rocket },
+  { name: 'gamepad', icon: Gamepad2 },
+  { name: 'music', icon: Music },
+  { name: 'sparkles', icon: Sparkles },
+  { name: 'flame', icon: Flame },
+  { name: 'shield', icon: Shield },
+];
+
+const COLOR_OPTIONS = [
+  '#4A90E2', // Blue
+  '#50E3C2', // Teal
+  '#9013FE', // Purple
+  '#F5A623', // Orange
+  '#E94B3C', // Red
+  '#7ED321', // Green
+  '#FF6B9D', // Pink
+  '#FFD93D', // Yellow
+  '#6C5CE7', // Indigo
+  '#00D2D3', // Cyan
+];
+
 function ParticipantView() {
   const { code } = Route.useParams();
   const [name, setName] = useState('');
-  const [participantId, setParticipantId] = useState<string | null>(null);
+  const [selectedAvatar, setSelectedAvatar] = useState<string>('user');
+  const [selectedColor, setSelectedColor] = useState<string>('#4A90E2');
+  const [participantId, setParticipantId] = useState<Id<'participants'> | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<Id<'answers'> | null>(null);
 
   const joinSession = useMutation(api.quizzes.joinSession);
   const submitAnswer = useMutation(api.quizzes.submitAnswer);
@@ -40,18 +86,8 @@ function ParticipantView() {
     api.quizzes.getParticipantResponses,
     participantId && session
       ? {
-          participantId,
+          participantId: participantId as Id<'participants'>,
           sessionId: session._id,
-        }
-      : 'skip',
-  );
-
-  const responses = useQuery(
-    api.quizzes.getSessionResponses,
-    session && currentQuestion
-      ? {
-          sessionId: session._id,
-          questionId: currentQuestion._id,
         }
       : 'skip',
   );
@@ -90,6 +126,8 @@ function ParticipantView() {
       const result = await joinSession({
         sessionId: session._id,
         name: name.trim(),
+        avatar: selectedAvatar,
+        color: selectedColor,
       });
       setParticipantId(result.participantId);
     } catch (error: any) {
@@ -98,7 +136,7 @@ function ParticipantView() {
     }
   };
 
-  const handleAnswerSelect = async (answerId: string) => {
+  const handleAnswerSelect = async (answerId: Id<'answers'>) => {
     if (hasAnswered || !session || !currentQuestion || !participantId) {
       return;
     }
@@ -109,7 +147,7 @@ function ParticipantView() {
       await submitAnswer({
         sessionId: session._id,
         questionId: currentQuestion._id,
-        participantId,
+        participantId: participantId as Id<'participants'>,
         answerId: answerId,
       });
       setHasAnswered(true);
@@ -161,6 +199,60 @@ function ParticipantView() {
                   maxLength={50}
                 />
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Choose your avatar
+                </label>
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                  {AVATAR_OPTIONS.map((avatar) => {
+                    const Icon = avatar.icon;
+                    return (
+                      <button
+                        key={avatar.name}
+                        type="button"
+                        onClick={() => setSelectedAvatar(avatar.name)}
+                        className={`
+                          p-3 rounded-lg border-2 transition-all
+                          ${
+                            selectedAvatar === avatar.name
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                              : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
+                          }
+                        `}
+                      >
+                        <Icon className="w-6 h-6 mx-auto" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Choose your color
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {COLOR_OPTIONS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setSelectedColor(color)}
+                      className={`
+                        w-10 h-10 rounded-full border-2 transition-all
+                        ${
+                          selectedColor === color
+                            ? 'border-gray-900 dark:border-white scale-110'
+                            : 'border-gray-300 dark:border-gray-700 hover:scale-105'
+                        }
+                      `}
+                      style={{ backgroundColor: color }}
+                      aria-label={`Select color ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
               <Button
                 type="submit"
                 className="bg-green-500 text-white hover:bg-green-600"
@@ -376,7 +468,6 @@ function ParticipantView() {
   const selectedAnswerData = currentQuestion.answers.find(
     (a) => a._id === selectedAnswer,
   );
-  const isCorrect = selectedAnswerData?.isCorrect ?? false;
 
   // Kahoot-style colors - vibrant and distinct
   const kahootColors = [

@@ -14,14 +14,12 @@ interface LeaderboardProps {
 
 export function Leaderboard({ entries }: LeaderboardProps) {
   const [visibleCount, setVisibleCount] = useState(0);
-  const [confettiTriggered, setConfettiTriggered] = useState(false);
 
   useEffect(() => {
     if (entries.length === 0) return;
 
     // Reset when entries change
     setVisibleCount(0);
-    setConfettiTriggered(false);
 
     const triggerConfetti = () => {
       const duration = 3000;
@@ -32,7 +30,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
         return Math.random() * (max - min) + min;
       }
 
-      const interval: NodeJS.Timeout = setInterval(() => {
+      const interval = setInterval(() => {
         const timeLeft = animationEnd - Date.now();
 
         if (timeLeft <= 0) {
@@ -54,7 +52,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
     };
 
     // Animate entries appearing one by one
-    const timers: NodeJS.Timeout[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
     entries.forEach((_, index) => {
       const timer = setTimeout(() => {
         setVisibleCount(index + 1);
@@ -63,7 +61,6 @@ export function Leaderboard({ entries }: LeaderboardProps) {
         if (index === 0 && entries[0].rank === 1) {
           setTimeout(() => {
             triggerConfetti();
-            setConfettiTriggered(true);
           }, 500);
         }
       }, index * 400); // 400ms delay between each entry
