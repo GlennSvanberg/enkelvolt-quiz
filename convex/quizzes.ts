@@ -53,6 +53,8 @@ export const getQuiz = query({
           _id: v.id('questions'),
           text: v.string(),
           order: v.number(),
+          imageUrl: v.union(v.string(), v.null()),
+          audioUrl: v.union(v.string(), v.null()),
           answers: v.array(
             v.object({
               _id: v.id('answers'),
@@ -84,10 +86,20 @@ export const getQuiz = query({
           .withIndex('by_question', (q) => q.eq('questionId', question._id))
           .order('asc')
           .collect();
+        
+        const imageUrl = question.imageStorageId
+          ? await ctx.storage.getUrl(question.imageStorageId)
+          : null;
+        const audioUrl = question.audioStorageId
+          ? await ctx.storage.getUrl(question.audioStorageId)
+          : null;
+
         return {
           _id: question._id,
           text: question.text,
           order: question.order,
+          imageUrl,
+          audioUrl,
           answers: answers.map((answer) => ({
             _id: answer._id,
             text: answer.text,
@@ -219,6 +231,8 @@ export const getCurrentQuestion = query({
       quizId: v.id('quizzes'),
       text: v.string(),
       order: v.number(),
+      imageUrl: v.union(v.string(), v.null()),
+      audioUrl: v.union(v.string(), v.null()),
       answers: v.array(
         v.object({
           _id: v.id('answers'),
@@ -246,17 +260,38 @@ export const getCurrentQuestion = query({
       return null;
     }
 
+    console.log('Current question from DB:', {
+      _id: currentQuestion._id,
+      text: currentQuestion.text,
+      imageStorageId: currentQuestion.imageStorageId,
+      audioStorageId: currentQuestion.audioStorageId,
+    });
+
     const answers = await ctx.db
       .query('answers')
       .withIndex('by_question', (q) => q.eq('questionId', currentQuestion._id))
       .order('asc')
       .collect();
 
+    const imageUrl = currentQuestion.imageStorageId
+      ? await ctx.storage.getUrl(currentQuestion.imageStorageId)
+      : null;
+    const audioUrl = currentQuestion.audioStorageId
+      ? await ctx.storage.getUrl(currentQuestion.audioStorageId)
+      : null;
+
+    console.log('Generated URLs:', {
+      imageUrl,
+      audioUrl,
+    });
+
     return {
       _id: currentQuestion._id,
       quizId: currentQuestion.quizId,
       text: currentQuestion.text,
       order: currentQuestion.order,
+      imageUrl,
+      audioUrl,
       answers: answers.map((answer) => ({
         _id: answer._id,
         text: answer.text,
@@ -364,6 +399,17 @@ export const getParticipantResponses = query({
 });
 
 /**
+ * Generate an upload URL for file storage
+ */
+export const generateUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
  * Create a new quiz with questions and answers
  */
 export const createQuiz = mutation({
@@ -373,6 +419,8 @@ export const createQuiz = mutation({
     questions: v.array(
       v.object({
         text: v.string(),
+        imageStorageId: v.optional(v.id('_storage')),
+        audioStorageId: v.optional(v.id('_storage')),
         answers: v.array(
           v.object({
             text: v.string(),
@@ -395,11 +443,19 @@ export const createQuiz = mutation({
 
     for (let i = 0; i < args.questions.length; i++) {
       const question = args.questions[i];
+      console.log(`Creating question ${i}:`, {
+        text: question.text,
+        imageStorageId: question.imageStorageId,
+        audioStorageId: question.audioStorageId,
+      });
       const questionId = await ctx.db.insert('questions', {
         quizId,
         text: question.text,
         order: i,
+        imageStorageId: question.imageStorageId,
+        audioStorageId: question.audioStorageId,
       });
+      console.log(`Question ${i} created with ID:`, questionId);
 
       for (let j = 0; j < question.answers.length; j++) {
         const answer = question.answers[j];
@@ -413,6 +469,88 @@ export const createQuiz = mutation({
     }
 
     return { quizId };
+  },
+});
+
+/**
+ * Update an existing quiz with questions and answers
+ */
+export const updateQuiz = mutation({
+  args: {
+    quizId: v.id('quizzes'),
+    title: v.string(),
+    description: v.optional(v.string()),
+    questions: v.array(
+      v.object({
+        text: v.string(),
+        imageStorageId: v.optional(v.id('_storage')),
+        audioStorageId: v.optional(v.id('_storage')),
+        answers: v.array(
+          v.object({
+            text: v.string(),
+            isCorrect: v.boolean(),
+          }),
+        ),
+      }),
+    ),
+  },
+  returns: v.object({
+    quizId: v.id('quizzes'),
+  }),
+  handler: async (ctx, args) => {
+    // Verify quiz exists
+    const quiz = await ctx.db.get(args.quizId);
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+
+    // Update quiz details
+    await ctx.db.patch(args.quizId, {
+      title: args.title,
+      description: args.description,
+    });
+
+    // Get existing questions
+    const existingQuestions = await ctx.db
+      .query('questions')
+      .withIndex('by_quiz', (q) => q.eq('quizId', args.quizId))
+      .collect();
+
+    // Delete existing answers for all questions
+    for (const question of existingQuestions) {
+      const existingAnswers = await ctx.db
+        .query('answers')
+        .withIndex('by_question', (q) => q.eq('questionId', question._id))
+        .collect();
+      for (const answer of existingAnswers) {
+        await ctx.db.delete(answer._id);
+      }
+      await ctx.db.delete(question._id);
+    }
+
+    // Insert new questions and answers
+    for (let i = 0; i < args.questions.length; i++) {
+      const question = args.questions[i];
+      const questionId = await ctx.db.insert('questions', {
+        quizId: args.quizId,
+        text: question.text,
+        order: i,
+        imageStorageId: question.imageStorageId,
+        audioStorageId: question.audioStorageId,
+      });
+
+      for (let j = 0; j < question.answers.length; j++) {
+        const answer = question.answers[j];
+        await ctx.db.insert('answers', {
+          questionId,
+          text: answer.text,
+          isCorrect: answer.isCorrect,
+          order: j,
+        });
+      }
+    }
+
+    return { quizId: args.quizId };
   },
 });
 

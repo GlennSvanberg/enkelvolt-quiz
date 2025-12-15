@@ -4,7 +4,7 @@ import { convexQuery } from '@convex-dev/react-query';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import {
@@ -69,6 +69,7 @@ function ParticipantView() {
   const [participantId, setParticipantId] = useState<Id<'participants'> | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<Id<'answers'> | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const joinSession = useMutation(api.quizzes.joinSession);
   const submitAnswer = useMutation(api.quizzes.submitAnswer);
@@ -116,6 +117,41 @@ function ParticipantView() {
   useEffect(() => {
     setHasAnswered(false);
     setSelectedAnswer(null);
+  }, [currentQuestion?._id]);
+
+  // Auto-play audio when question appears
+  useEffect(() => {
+    if (currentQuestion?.audioUrl && audioRef.current) {
+      console.log('Attempting to play audio:', currentQuestion.audioUrl);
+      // Reset audio to start from beginning
+      audioRef.current.currentTime = 0;
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Audio playing successfully');
+          })
+          .catch((error) => {
+            console.error('Error playing audio (autoplay may be blocked):', error);
+            // Autoplay was prevented - this is expected in some browsers
+            // The user can manually interact to play audio if needed
+          });
+      }
+    } else if (currentQuestion && !currentQuestion.audioUrl) {
+      console.log('No audio URL for current question');
+    }
+  }, [currentQuestion?.audioUrl, currentQuestion?._id]);
+
+  // Log image URL for debugging
+  useEffect(() => {
+    if (currentQuestion) {
+      console.log('Current question media:', {
+        hasImage: !!currentQuestion.imageUrl,
+        hasAudio: !!currentQuestion.audioUrl,
+        imageUrl: currentQuestion.imageUrl,
+        audioUrl: currentQuestion.audioUrl,
+      });
+    }
   }, [currentQuestion?._id]);
 
   const handleJoin = async (e: React.FormEvent) => {
@@ -522,9 +558,46 @@ function ParticipantView() {
           <ThemeToggle />
         </div>
       </header>
-      <main className="h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
-        {/* Answer Grid Section - Full height, no question visible */}
-        <div className="flex-1 px-3 sm:px-4 pb-3 sm:pb-4 overflow-auto flex items-center justify-center">
+      <main className="h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden relative">
+        {/* Audio Element */}
+        {currentQuestion.audioUrl && (
+          <audio
+            ref={audioRef}
+            src={currentQuestion.audioUrl}
+            preload="auto"
+            autoPlay
+            className="hidden"
+            onError={(e) => {
+              console.error('Audio playback error:', e);
+            }}
+          />
+        )}
+
+        {/* Image Section - Top */}
+        {currentQuestion.imageUrl && (
+          <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 relative min-h-0">
+            <div
+              className="w-full h-full bg-contain bg-center bg-no-repeat"
+              style={{ backgroundImage: `url(${currentQuestion.imageUrl})` }}
+            />
+          </div>
+        )}
+
+        {/* Question Text - Below image, closer to alternatives */}
+        {currentQuestion.text && (
+          <div className="px-3 sm:px-4 py-2 sm:py-3 flex justify-center relative z-10">
+            <div className="w-full max-w-4xl">
+              <div className="bg-background/30 backdrop-blur-sm border-2 rounded-lg p-4 shadow-lg">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center drop-shadow-lg">
+                  {currentQuestion.text}
+                </h2>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Answer Grid Section - Bottom */}
+        <div className="flex-1 px-3 sm:px-4 pb-3 sm:pb-4 overflow-auto flex items-center justify-center relative z-10">
           {hasAnswered ? (
             <div className="max-w-4xl mx-auto w-full flex items-center justify-center">
               <div className="p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl text-center w-full bg-blue-500 text-white">

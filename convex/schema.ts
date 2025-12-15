@@ -11,6 +11,8 @@ export default defineSchema({
     quizId: v.id('quizzes'),
     text: v.string(),
     order: v.number(),
+    imageStorageId: v.optional(v.id('_storage')),
+    audioStorageId: v.optional(v.id('_storage')),
   }).index('by_quiz', ['quizId']),
   answers: defineTable({
     questionId: v.id('questions'),

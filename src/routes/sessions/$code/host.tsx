@@ -86,6 +86,7 @@ function HostView() {
   const [progressBarBounce, setProgressBarBounce] = useState(false);
   const previousResponseIds = useRef<Set<string>>(new Set());
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const avatarIconMap: Record<string, LucideIcon> = {
     user: User,
@@ -165,6 +166,41 @@ function HostView() {
 
     previousResponseIds.current = currentResponseIds;
   }, [responses, session?.status, currentQuestion]);
+
+  // Auto-play audio when question appears
+  useEffect(() => {
+    if (currentQuestion?.audioUrl && audioRef.current && session?.status === 'active') {
+      console.log('Attempting to play audio:', currentQuestion.audioUrl);
+      // Reset audio to start from beginning
+      audioRef.current.currentTime = 0;
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Audio playing successfully');
+          })
+          .catch((error) => {
+            console.error('Error playing audio (autoplay may be blocked):', error);
+            // Autoplay was prevented - this is expected in some browsers
+            // The user can manually interact to play audio if needed
+          });
+      }
+    } else if (currentQuestion && session?.status === 'active' && !currentQuestion.audioUrl) {
+      console.log('No audio URL for current question');
+    }
+  }, [currentQuestion?.audioUrl, currentQuestion?._id, session?.status]);
+
+  // Log image URL for debugging
+  useEffect(() => {
+    if (currentQuestion && session?.status === 'active') {
+      console.log('Current question media:', {
+        hasImage: !!currentQuestion.imageUrl,
+        hasAudio: !!currentQuestion.audioUrl,
+        imageUrl: currentQuestion.imageUrl,
+        audioUrl: currentQuestion.audioUrl,
+      });
+    }
+  }, [currentQuestion?._id, session?.status]);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(code);
@@ -307,9 +343,9 @@ function HostView() {
           <ThemeToggle />
         </div>
       </header>
-      <main className="h-[calc(100vh-3rem)] sm:h-[calc(100vh-3.5rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      <main className="h-[calc(100vh-3rem)] sm:h-[calc(100vh-3.5rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden relative">
         {/* Top Section - Quiz Info and Controls */}
-        <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
+        <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200 dark:border-gray-800 shrink-0 relative z-10">
           <div className="max-w-6xl mx-auto">
             <div className="flex flex-row items-center justify-between gap-1.5 sm:gap-2 flex-nowrap">
               <div className="flex items-center gap-2 shrink-0 min-w-0">
@@ -521,18 +557,57 @@ function HostView() {
           )}
 
           {session.status === 'active' && currentQuestion && (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Question Section - Top (50% height) */}
-              <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4">
-                <div className="w-full max-w-4xl">
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center text-gray-900 dark:text-white leading-tight px-2">
-                    {currentQuestion.text}
-                  </h1>
-                </div>
-              </div>
+            <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+              {/* Audio Element */}
+              {currentQuestion.audioUrl && (
+                <audio
+                  ref={audioRef}
+                  src={currentQuestion.audioUrl}
+                  preload="auto"
+                  autoPlay
+                  className="hidden"
+                  onError={(e) => {
+                    console.error('Audio playback error:', e);
+                  }}
+                />
+              )}
 
-              {/* Answer Responses Grid - Bottom (50% height) */}
-              <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden">
+              {/* Image + Question Section - Image extends down to question, question overlaid at bottom */}
+              {currentQuestion.imageUrl ? (
+                <div className="flex-1 flex flex-col overflow-hidden relative min-h-0">
+                  {/* Image Background - Extends down to question */}
+                  <div
+                    className="absolute inset-0 bg-contain bg-center bg-no-repeat z-0"
+                    style={{ backgroundImage: `url(${currentQuestion.imageUrl})` }}
+                  />
+                  {/* Spacer - Pushes question to bottom */}
+                  <div className="flex-1 min-h-0" />
+                  {/* Question Text - Overlaid at bottom of image, aligned with bottom edge */}
+                  <div className="px-3 sm:px-4 flex justify-center relative z-10 shrink-0">
+                    <div className="w-full max-w-4xl">
+                      <div className="bg-background/30 backdrop-blur-sm border-2 rounded-lg rounded-b-none p-4 sm:p-6 pb-4 sm:pb-6 shadow-lg">
+                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center text-gray-900 dark:text-white leading-tight px-2 drop-shadow-lg">
+                          {currentQuestion.text}
+                        </h1>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Question Text - Centered when no image */
+                <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 relative z-10">
+                  <div className="w-full max-w-4xl">
+                    <div className="bg-background/30 backdrop-blur-sm border-2 rounded-lg p-4 sm:p-6 shadow-lg">
+                      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center text-gray-900 dark:text-white leading-tight px-2 drop-shadow-lg">
+                        {currentQuestion.text}
+                      </h1>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Answer Responses Grid - Bottom (no image behind) */}
+              <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden relative z-10">
                 <div className="max-w-4xl mx-auto h-full flex flex-col">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 auto-rows-fr min-h-0">
                     {currentQuestion.answers.map((answer, index) => {
@@ -574,18 +649,30 @@ function HostView() {
           )}
 
           {session.status === 'showing_results' && currentQuestion && (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Question Section - Top (50% height) */}
-              <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4">
+            <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+              {/* Image Section - Top */}
+              {currentQuestion.imageUrl && (
+                <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 relative min-h-0">
+                  <div
+                    className="w-full h-full bg-contain bg-center bg-no-repeat"
+                    style={{ backgroundImage: `url(${currentQuestion.imageUrl})` }}
+                  />
+                </div>
+              )}
+
+              {/* Question Text - Below image, closer to alternatives */}
+              <div className="px-3 sm:px-4 py-2 sm:py-3 flex justify-center relative z-10">
                 <div className="w-full max-w-4xl">
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center text-gray-900 dark:text-white leading-tight px-2">
-                    {currentQuestion.text}
-                  </h1>
+                  <div className="bg-background/30 backdrop-blur-sm border-2 rounded-lg p-4 sm:p-6 shadow-lg">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center text-gray-900 dark:text-white leading-tight px-2 drop-shadow-lg">
+                      {currentQuestion.text}
+                    </h1>
+                  </div>
                 </div>
               </div>
 
               {/* Results Section - Bottom (50% height) */}
-              <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden">
+              <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden relative">
                 <div className="max-w-4xl mx-auto h-full flex flex-col">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 auto-rows-fr min-h-0">
                     {responseCounts.map((item, index) => {
