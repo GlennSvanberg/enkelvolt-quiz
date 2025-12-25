@@ -1,29 +1,29 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { Link, createFileRoute } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
 import { useMutation, useQuery } from 'convex/react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, Copy,
+  Crown,
+  Flame,
+  Gamepad2,
+  Heart,
+  
+  Music,
+  Rocket,
+  Shield,
+  Sparkles,
+  Star,
+  Trophy,
+  User,
+  Zap
+ } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../../../../convex/_generated/api';
-import { useEffect, useState, useRef } from 'react';
+import type {LucideIcon} from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Leaderboard } from '~/components/Leaderboard';
 import { ThemeToggle } from '~/components/ThemeToggle';
-import { Copy, Check } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import {
-  User,
-  Star,
-  Heart,
-  Zap,
-  Trophy,
-  Crown,
-  Rocket,
-  Gamepad2,
-  Music,
-  Sparkles,
-  Flame,
-  Shield,
-  type LucideIcon,
-} from 'lucide-react';
 
 export const Route = createFileRoute('/sessions/$code/host')({
   component: HostView,
@@ -87,7 +87,7 @@ function HostView() {
   const previousResponseIds = useRef<Set<string>>(new Set());
   const progressBarRef = useRef<HTMLDivElement>(null);
 
-  const avatarIconMap: Record<string, LucideIcon> = {
+  const avatarIconMap: Partial<Record<string, LucideIcon>> = {
     user: User,
     star: Star,
     heart: Heart,

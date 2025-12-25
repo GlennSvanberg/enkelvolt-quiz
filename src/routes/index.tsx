@@ -1,7 +1,9 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
+import { SignedIn, SignedOut, UserButton } from '@clerk/tanstack-start';
+import { Shield, Sparkles, Users, Zap } from 'lucide-react';
 import { api } from '../../convex/_generated/api';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
@@ -12,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card';
-import { Zap, Users, Shield, Sparkles } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
   component: Home,
@@ -51,7 +52,17 @@ function Home() {
               Enkelvolt
             </span>
           </Link>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <SignedIn>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+            <SignedOut>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/sign-in">Admin sign in</Link>
+              </Button>
+            </SignedOut>
+          </div>
         </div>
       </header>
 
@@ -83,13 +94,26 @@ function Home() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                <Button
-                  asChild
-                  size="lg"
-                  className="flex-1 text-lg h-14 bg-primary hover:bg-primary/90"
-                >
-                  <Link to="/quizzes/create">Create Quiz</Link>
-                </Button>
+                <SignedIn>
+                  <Button
+                    asChild
+                    size="lg"
+                    className="flex-1 text-lg h-14 bg-primary hover:bg-primary/90"
+                  >
+                    <Link to="/quizzes/create">Create Quiz</Link>
+                  </Button>
+                </SignedIn>
+                <SignedOut>
+                  <Button
+                    asChild
+                    size="lg"
+                    className="flex-1 text-lg h-14 bg-primary hover:bg-primary/90"
+                  >
+                    <Link to="/sign-in" search={{ redirect: '/quizzes/create' } as any}>
+                      Sign in to create
+                    </Link>
+                  </Button>
+                </SignedOut>
                 <Button
                   size="lg"
                   variant="secondary"
@@ -203,9 +227,18 @@ function Home() {
                   Browse and play quizzes created by the community
                 </p>
               </div>
-              <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
-                <Link to="/quizzes/create">Create New Quiz</Link>
-              </Button>
+              <SignedIn>
+                <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
+                  <Link to="/quizzes/create">Create New Quiz</Link>
+                </Button>
+              </SignedIn>
+              <SignedOut>
+                <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
+                  <Link to="/sign-in" search={{ redirect: '/quizzes/create' } as any}>
+                    Sign in to create
+                  </Link>
+                </Button>
+              </SignedOut>
             </div>
 
             {quizzes.length === 0 ? (
@@ -216,9 +249,18 @@ function Home() {
                   <CardDescription className="mb-6">
                     Be the first to create an amazing quiz!
                   </CardDescription>
-                  <Button asChild className="bg-primary hover:bg-primary/90">
-                    <Link to="/quizzes/create">Create Your First Quiz</Link>
-                  </Button>
+                  <SignedIn>
+                    <Button asChild className="bg-primary hover:bg-primary/90">
+                      <Link to="/quizzes/create">Create Your First Quiz</Link>
+                    </Button>
+                  </SignedIn>
+                  <SignedOut>
+                    <Button asChild className="bg-primary hover:bg-primary/90">
+                      <Link to="/sign-in" search={{ redirect: '/quizzes/create' } as any}>
+                        Sign in to create
+                      </Link>
+                    </Button>
+                  </SignedOut>
                 </CardContent>
               </Card>
             ) : (

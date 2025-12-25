@@ -2,23 +2,19 @@
 
 **Enkelvolt** is a simple Kahoot-style quiz app. It's a URL-based quiz application where:
 
-- **Admins** need to login (via Better Auth) to create and manage quizzes
+- **Admins** need to login (via Clerk) to create and manage quizzes
 - **Participants** can join quizzes without authentication by simply visiting a URL or scanning a QR code
 - No extra complexity - just simple, straightforward quiz functionality
 
-This project uses **TanStack Start**, **Better Auth**, and **Convex** for a modern full-stack React application.
+This project uses **TanStack Start**, **Clerk**, and **Convex** for a modern full-stack React application.
 
 ## Tech Stack
 
 - **TanStack Start**: Full-stack React framework with file-based routing (`src/routes/`)
-- **Better Auth**: Authentication with email/password sign-in/sign-up
+- **Clerk**: Authentication (Google sign-in)
 - **Convex**: Backend database and serverless functions (`convex/`)
 - **Vite**: Build tool and dev server
-- **Tailwind\# UI
-C- Always use Shadcn/ui components when possible - use mcp tools to find relevant components
-
-SS**: Styling
--
+- **Tailwind CSS**: Styling (prefer shadcn/ui components when possible)
 
 ## Key Setup Details
 
@@ -28,30 +24,30 @@ SS**: Styling
 - Server loaders for data fetching (`loader` functions)
 - Uses `@tanstack/react-router` and `@tanstack/react-start`
 
-### Better Auth
+### Clerk
 
-- Environment variables required in `.env.local`:
-  - `SITE_URL` (e.g., `http://localhost:3000`)
-- Client hooks: `useSession()` from `better-auth/react` via `authClient`
-- Server functions: `getAuth()`, `getSession()` from `src/lib/auth-server`
-- Auth API route: `src/routes/api/auth/$` (catch-all route)
-- Sign-in/sign-up pages: `src/routes/sign-in.tsx` and `src/routes/sign-up.tsx`
-- Client setup: `src/lib/auth-client.ts` exports `authClient`
+- Environment variables in `.env.local`:
+  - `VITE_CLERK_PUBLISHABLE_KEY`
+  - `VITE_CLERK_JWT_TEMPLATE` (optional, default `convex`)
+- Sign-in page: `src/routes/sign-in.tsx`
+- Route access:
+  - public: playing/hosting sessions, viewing quizzes
+  - protected by UI + server enforcement: creating/editing quizzes
 
 ### Convex
 
 - Functions in `convex/` directory
-- Auth setup: `convex/auth.ts` (Better Auth configuration with Convex integration)
-- Better Auth component: Added to `convex/schema.ts` via `defineComponent(betterAuth)`
-- Environment variable: `SITE_URL` set via `npx convex env set SITE_URL <url>`
+- Auth setup: `convex/auth.config.ts` (Clerk JWT issuer configuration)
+- Convex env variables:
+  - `CLERK_JWT_ISSUER_DOMAIN`
 - Convex URL: `VITE_CONVEX_URL` in `.env.local` (auto-added by `npx convex dev`)
-- Client provider: `ConvexClientProvider` wraps app with `ConvexBetterAuthProvider`
+- Client provider: `ClerkProvider` + `ConvexProvider` wired in `src/router.tsx`
 
 ## Important Notes
 
 - **PowerShell**: Use `;` instead of `&&` for command chaining
 - **Port**: Default dev server runs on `http://localhost:3000`
-- **Docs**: Use Context7 to get latest documentation for TanStack Start, Better Auth, and Convex
+- **Docs**: Use Context7 to get latest documentation for TanStack Start, Clerk, and Convex
 
 ## Common Commands
 
@@ -61,7 +57,7 @@ npm run dev
 
 # Convex commands
 npx convex dev
-npx convex env set SITE_URL http://localhost:3000
+npx convex env set CLERK_JWT_ISSUER_DOMAIN <your-clerk-jwt-issuer-domain>
 
 # Build
 npm run build
@@ -76,8 +72,8 @@ src/
   lib/             # Auth client and server utilities
   start.ts         # TanStack Start config
 convex/
-  auth.ts          # Better Auth configuration
-  schema.ts        # Convex schema with Better Auth component
+  auth.config.ts   # Convex auth provider configuration (Clerk)
+  schema.ts        # Convex schema
   quizzes.ts       # Convex queries/mutations
 .env.local        # Environment variables (not committed)
 ```

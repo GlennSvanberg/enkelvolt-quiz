@@ -1,7 +1,8 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
 import { useMutation } from 'convex/react';
+import { useAuth } from '@clerk/tanstack-start';
 import { api } from '../../../convex/_generated/api';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
@@ -20,14 +21,18 @@ function QuizDetail() {
   const { quizId } = Route.useParams();
   const navigate = useNavigate();
   const createSession = useMutation(api.quizzes.createSession);
+  const { userId, isSignedIn } = useAuth();
 
   const { data: quiz } = useSuspenseQuery(
-    convexQuery(api.quizzes.getQuiz, { quizId: quizId as any }),
+    convexQuery(api.quizzes.getQuiz, { quizId: quizId }),
   );
+
+  const canEdit =
+    isSignedIn === true && !!quiz?.ownerId && quiz.ownerId === userId;
 
   const handleStartSession = async () => {
     try {
-      const result = await createSession({ quizId: quizId as any });
+      const result = await createSession({ quizId: quizId });
       navigate({
         to: '/sessions/$code/host',
         params: { code: result.code } as any,
@@ -80,7 +85,7 @@ function QuizDetail() {
           </p>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 flex flex-wrap gap-3">
           <Button
             onClick={handleStartSession}
             className="bg-green-500 text-white hover:bg-green-600 text-lg"
@@ -88,6 +93,13 @@ function QuizDetail() {
           >
             Start Session
           </Button>
+          {canEdit && (
+            <Button asChild variant="outline" size="lg">
+              <Link to="/quizzes/$quizId/edit" params={{ quizId } as any}>
+                Edit Quiz
+              </Link>
+            </Button>
+          )}
         </div>
 
         <div className="border rounded-lg p-6 bg-white dark:bg-gray-900">

@@ -1,5 +1,5 @@
-import { query, mutation } from './_generated/server';
 import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
 
 /**
  * Generate a unique 6-character alphanumeric code
@@ -47,6 +47,7 @@ export const getQuiz = query({
       _creationTime: v.number(),
       title: v.string(),
       description: v.optional(v.string()),
+      ownerId: v.optional(v.string()),
       createdAt: v.number(),
       questions: v.array(
         v.object({
@@ -66,7 +67,7 @@ export const getQuiz = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const quiz = await ctx.db.get(args.quizId);
+    const quiz = await ctx.db.get("quizzes", args.quizId);
     if (!quiz) {
       return null;
     }
@@ -103,6 +104,7 @@ export const getQuiz = query({
       _creationTime: quiz._creationTime,
       title: quiz.title,
       description: quiz.description,
+      ownerId: quiz.ownerId,
       createdAt: quiz.createdAt,
       questions: questionsWithAnswers,
     };
@@ -143,7 +145,7 @@ export const getSession = query({
       return null;
     }
 
-    const quiz = await ctx.db.get(session.quizId);
+    const quiz = await ctx.db.get("quizzes", session.quizId);
     if (!quiz) {
       return null;
     }
@@ -230,7 +232,7 @@ export const getCurrentQuestion = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       return null;
     }
@@ -241,10 +243,10 @@ export const getCurrentQuestion = query({
       .order('asc')
       .collect();
 
-    const currentQuestion = questions[session.currentQuestionIndex];
-    if (!currentQuestion) {
+    if (session.currentQuestionIndex >= questions.length) {
       return null;
     }
+    const currentQuestion = questions[session.currentQuestionIndex];
 
     const answers = await ctx.db
       .query('answers')
@@ -304,8 +306,8 @@ export const getSessionResponses = query({
 
     const responsesWithDetails = await Promise.all(
       responses.map(async (response) => {
-        const participant = await ctx.db.get(response.participantId);
-        const answer = await ctx.db.get(response.answerId);
+        const participant = await ctx.db.get("participants", response.participantId);
+        const answer = await ctx.db.get("answers", response.answerId);
         return {
           _id: response._id,
           sessionId: response.sessionId,
@@ -386,10 +388,16 @@ export const createQuiz = mutation({
     quizId: v.id('quizzes'),
   }),
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error('Authentication required');
+    }
+
     const now = Date.now();
     const quizId = await ctx.db.insert('quizzes', {
       title: args.title,
       description: args.description,
+      ownerId: identity.subject,
       createdAt: now,
     });
 
@@ -417,6 +425,92 @@ export const createQuiz = mutation({
 });
 
 /**
+ * Update an existing quiz (owner only).
+ * Replaces questions/answers wholesale.
+ */
+export const updateQuiz = mutation({
+  args: {
+    quizId: v.id('quizzes'),
+    title: v.string(),
+    description: v.optional(v.string()),
+    questions: v.array(
+      v.object({
+        text: v.string(),
+        answers: v.array(
+          v.object({
+            text: v.string(),
+            isCorrect: v.boolean(),
+          }),
+        ),
+      }),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error('Authentication required');
+    }
+
+    const quiz = await ctx.db.get("quizzes", args.quizId);
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+    if (!quiz.ownerId) {
+      throw new Error('Quiz has no owner');
+    }
+    if (quiz.ownerId !== identity.subject) {
+      throw new Error('Not authorized to edit this quiz');
+    }
+
+    // Update quiz metadata
+    await ctx.db.patch("quizzes", args.quizId, {
+      title: args.title,
+      description: args.description,
+    });
+
+    // Delete existing questions and answers
+    const existingQuestions = await ctx.db
+      .query('questions')
+      .withIndex('by_quiz', (q) => q.eq('quizId', args.quizId))
+      .collect();
+
+    for (const question of existingQuestions) {
+      const existingAnswers = await ctx.db
+        .query('answers')
+        .withIndex('by_question', (a) => a.eq('questionId', question._id))
+        .collect();
+      for (const answer of existingAnswers) {
+        await ctx.db.delete("answers", answer._id);
+      }
+      await ctx.db.delete("questions", question._id);
+    }
+
+    // Insert new questions and answers
+    for (let i = 0; i < args.questions.length; i++) {
+      const question = args.questions[i];
+      const questionId = await ctx.db.insert('questions', {
+        quizId: args.quizId,
+        text: question.text,
+        order: i,
+      });
+
+      for (let j = 0; j < question.answers.length; j++) {
+        const answer = question.answers[j];
+        await ctx.db.insert('answers', {
+          questionId,
+          text: answer.text,
+          isCorrect: answer.isCorrect,
+          order: j,
+        });
+      }
+    }
+
+    return null;
+  },
+});
+
+/**
  * Start a new quiz session (generate unique code)
  */
 export const createSession = mutation({
@@ -429,7 +523,7 @@ export const createSession = mutation({
   }),
   handler: async (ctx, args) => {
     // Check if quiz exists
-    const quiz = await ctx.db.get(args.quizId);
+    const quiz = await ctx.db.get("quizzes", args.quizId);
     if (!quiz) {
       throw new Error('Quiz not found');
     }
@@ -477,7 +571,7 @@ export const joinSession = mutation({
     participantId: v.id('participants'),
   }),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
@@ -511,7 +605,7 @@ export const submitAnswer = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
@@ -534,12 +628,12 @@ export const submitAnswer = mutation({
     }
 
     // Verify the answer belongs to the question
-    const answer = await ctx.db.get(args.answerId);
+    const answer = await ctx.db.get("answers", args.answerId);
     if (!answer) {
       throw new Error('Answer not found');
     }
 
-    const question = await ctx.db.get(args.questionId);
+    const question = await ctx.db.get("questions", args.questionId);
     if (!question) {
       throw new Error('Question not found');
     }
@@ -576,7 +670,7 @@ export const showResults = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
@@ -586,7 +680,7 @@ export const showResults = mutation({
     }
 
     // Change status to showing_results
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("sessions", args.sessionId, {
       status: 'showing_results',
     });
 
@@ -604,7 +698,7 @@ export const nextQuestion = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
@@ -623,13 +717,13 @@ export const nextQuestion = mutation({
 
     if (nextIndex >= questions.length) {
       // End session
-      await ctx.db.patch(args.sessionId, {
+      await ctx.db.patch("sessions", args.sessionId, {
         status: 'finished',
         currentQuestionIndex: session.currentQuestionIndex,
       });
     } else {
       // Move to next question
-      await ctx.db.patch(args.sessionId, {
+      await ctx.db.patch("sessions", args.sessionId, {
         status: 'active',
         currentQuestionIndex: nextIndex,
       });
@@ -648,7 +742,7 @@ export const startSession = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
@@ -657,7 +751,7 @@ export const startSession = mutation({
       throw new Error('Session has already started');
     }
 
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("sessions", args.sessionId, {
       status: 'active',
       currentQuestionIndex: 0,
     });
@@ -675,12 +769,12 @@ export const endSession = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
 
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch("sessions", args.sessionId, {
       status: 'finished',
     });
 
@@ -705,7 +799,7 @@ export const getSessionLeaderboard = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const session = await ctx.db.get("sessions", args.sessionId);
     if (!session) {
       return [];
     }
@@ -733,7 +827,7 @@ export const getSessionLeaderboard = query({
         // Count correct answers
         let score = 0;
         for (const response of participantResponses) {
-          const answer = await ctx.db.get(response.answerId);
+          const answer = await ctx.db.get("answers", response.answerId);
           if (answer?.isCorrect) {
             score += 1;
           }
