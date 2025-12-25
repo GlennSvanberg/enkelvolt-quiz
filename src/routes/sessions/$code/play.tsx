@@ -1,27 +1,28 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { Link, createFileRoute } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
 import { useMutation, useQuery } from 'convex/react';
+import { useEffect, useState } from 'react';
+import {
+  Crown,
+  Flame,
+  Gamepad2,
+  Heart,
+  
+  Music,
+  Rocket,
+  Shield,
+  Sparkles,
+  Star,
+  Trophy,
+  User,
+  Zap
+} from 'lucide-react';
 import { api } from '../../../../convex/_generated/api';
+import type {LucideIcon} from 'lucide-react';
 import type { Id } from '../../../../convex/_generated/dataModel';
-import { useState, useEffect } from 'react';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
-import {
-  User,
-  Star,
-  Heart,
-  Zap,
-  Trophy,
-  Crown,
-  Rocket,
-  Gamepad2,
-  Music,
-  Sparkles,
-  Flame,
-  Shield,
-  type LucideIcon,
-} from 'lucide-react';
 
 export const Route = createFileRoute('/sessions/$code/play')({
   component: ParticipantView,
@@ -33,7 +34,7 @@ export const Route = createFileRoute('/sessions/$code/play')({
   },
 });
 
-const AVATAR_OPTIONS: { name: string; icon: LucideIcon }[] = [
+const AVATAR_OPTIONS: Array<{ name: string; icon: LucideIcon }> = [
   { name: 'user', icon: User },
   { name: 'star', icon: Star },
   { name: 'heart', icon: Heart },
@@ -86,7 +87,7 @@ function ParticipantView() {
     api.quizzes.getParticipantResponses,
     participantId && session
       ? {
-          participantId: participantId as Id<'participants'>,
+          participantId: participantId,
           sessionId: session._id,
         }
       : 'skip',
@@ -147,7 +148,7 @@ function ParticipantView() {
       await submitAnswer({
         sessionId: session._id,
         questionId: currentQuestion._id,
-        participantId: participantId as Id<'participants'>,
+        participantId: participantId,
         answerId: answerId,
       });
       setHasAnswered(true);
