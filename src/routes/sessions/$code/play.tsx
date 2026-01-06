@@ -292,6 +292,7 @@ function ParticipantView() {
               <Button
                 type="submit"
                 className="bg-green-500 text-white hover:bg-green-600"
+                trackaton-on-click="play-join-session"
               >
                 Join Quiz
               </Button>
@@ -623,6 +624,7 @@ function ParticipantView() {
                     <button
                       key={answer._id}
                       onClick={() => handleAnswerSelect(answer._id)}
+                      trackaton-on-click="play-submit-answer"
                       className={`
                         ${colors.bg} ${colors.text} ${colors.hover}
                         rounded-xl sm:rounded-2xl

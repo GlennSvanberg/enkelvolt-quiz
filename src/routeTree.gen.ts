@@ -15,6 +15,7 @@ import { Route as QuizzesCreateRouteImport } from './routes/quizzes/create'
 import { Route as QuizzesQuizIdRouteImport } from './routes/quizzes/$quizId'
 import { Route as SessionsCodePlayRouteImport } from './routes/sessions/$code/play'
 import { Route as SessionsCodeHostRouteImport } from './routes/sessions/$code/host'
+import { Route as QuizzesQuizIdEditRouteImport } from './routes/quizzes/$quizId/edit'
 
 const AnotherPageRoute = AnotherPageRouteImport.update({
   id: '/anotherPage',
@@ -46,20 +47,27 @@ const SessionsCodeHostRoute = SessionsCodeHostRouteImport.update({
   path: '/sessions/$code/host',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuizzesQuizIdEditRoute = QuizzesQuizIdEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => QuizzesQuizIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
-  '/quizzes/$quizId': typeof QuizzesQuizIdRoute
+  '/quizzes/$quizId': typeof QuizzesQuizIdRouteWithChildren
   '/quizzes/create': typeof QuizzesCreateRoute
+  '/quizzes/$quizId/edit': typeof QuizzesQuizIdEditRoute
   '/sessions/$code/host': typeof SessionsCodeHostRoute
   '/sessions/$code/play': typeof SessionsCodePlayRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
-  '/quizzes/$quizId': typeof QuizzesQuizIdRoute
+  '/quizzes/$quizId': typeof QuizzesQuizIdRouteWithChildren
   '/quizzes/create': typeof QuizzesCreateRoute
+  '/quizzes/$quizId/edit': typeof QuizzesQuizIdEditRoute
   '/sessions/$code/host': typeof SessionsCodeHostRoute
   '/sessions/$code/play': typeof SessionsCodePlayRoute
 }
@@ -67,8 +75,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
-  '/quizzes/$quizId': typeof QuizzesQuizIdRoute
+  '/quizzes/$quizId': typeof QuizzesQuizIdRouteWithChildren
   '/quizzes/create': typeof QuizzesCreateRoute
+  '/quizzes/$quizId/edit': typeof QuizzesQuizIdEditRoute
   '/sessions/$code/host': typeof SessionsCodeHostRoute
   '/sessions/$code/play': typeof SessionsCodePlayRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/anotherPage'
     | '/quizzes/$quizId'
     | '/quizzes/create'
+    | '/quizzes/$quizId/edit'
     | '/sessions/$code/host'
     | '/sessions/$code/play'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/anotherPage'
     | '/quizzes/$quizId'
     | '/quizzes/create'
+    | '/quizzes/$quizId/edit'
     | '/sessions/$code/host'
     | '/sessions/$code/play'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/anotherPage'
     | '/quizzes/$quizId'
     | '/quizzes/create'
+    | '/quizzes/$quizId/edit'
     | '/sessions/$code/host'
     | '/sessions/$code/play'
   fileRoutesById: FileRoutesById
@@ -102,7 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnotherPageRoute: typeof AnotherPageRoute
-  QuizzesQuizIdRoute: typeof QuizzesQuizIdRoute
+  QuizzesQuizIdRoute: typeof QuizzesQuizIdRouteWithChildren
   QuizzesCreateRoute: typeof QuizzesCreateRoute
   SessionsCodeHostRoute: typeof SessionsCodeHostRoute
   SessionsCodePlayRoute: typeof SessionsCodePlayRoute
@@ -152,13 +164,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SessionsCodeHostRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/quizzes/$quizId/edit': {
+      id: '/quizzes/$quizId/edit'
+      path: '/edit'
+      fullPath: '/quizzes/$quizId/edit'
+      preLoaderRoute: typeof QuizzesQuizIdEditRouteImport
+      parentRoute: typeof QuizzesQuizIdRoute
+    }
   }
 }
+
+interface QuizzesQuizIdRouteChildren {
+  QuizzesQuizIdEditRoute: typeof QuizzesQuizIdEditRoute
+}
+
+const QuizzesQuizIdRouteChildren: QuizzesQuizIdRouteChildren = {
+  QuizzesQuizIdEditRoute: QuizzesQuizIdEditRoute,
+}
+
+const QuizzesQuizIdRouteWithChildren = QuizzesQuizIdRoute._addFileChildren(
+  QuizzesQuizIdRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnotherPageRoute: AnotherPageRoute,
-  QuizzesQuizIdRoute: QuizzesQuizIdRoute,
+  QuizzesQuizIdRoute: QuizzesQuizIdRouteWithChildren,
   QuizzesCreateRoute: QuizzesCreateRoute,
   SessionsCodeHostRoute: SessionsCodeHostRoute,
   SessionsCodePlayRoute: SessionsCodePlayRoute,

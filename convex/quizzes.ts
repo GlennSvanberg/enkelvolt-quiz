@@ -55,6 +55,8 @@ export const getQuiz = query({
           order: v.number(),
           imageUrl: v.union(v.string(), v.null()),
           audioUrl: v.union(v.string(), v.null()),
+          imageStorageId: v.union(v.id('_storage'), v.null()),
+          audioStorageId: v.union(v.id('_storage'), v.null()),
           answers: v.array(
             v.object({
               _id: v.id('answers'),
@@ -100,6 +102,8 @@ export const getQuiz = query({
           order: question.order,
           imageUrl,
           audioUrl,
+          imageStorageId: question.imageStorageId || null,
+          audioStorageId: question.audioStorageId || null,
           answers: answers.map((answer) => ({
             _id: answer._id,
             text: answer.text,
@@ -551,6 +555,79 @@ export const updateQuiz = mutation({
     }
 
     return { quizId: args.quizId };
+  },
+});
+
+/**
+ * Delete a quiz and all related data (questions, answers, sessions, participants, responses)
+ */
+export const deleteQuiz = mutation({
+  args: {
+    quizId: v.id('quizzes'),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // Verify quiz exists
+    const quiz = await ctx.db.get(args.quizId);
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+
+    // Get all questions for this quiz
+    const questions = await ctx.db
+      .query('questions')
+      .withIndex('by_quiz', (q) => q.eq('quizId', args.quizId))
+      .collect();
+
+    // Delete all answers for each question
+    for (const question of questions) {
+      const answers = await ctx.db
+        .query('answers')
+        .withIndex('by_question', (q) => q.eq('questionId', question._id))
+        .collect();
+      for (const answer of answers) {
+        await ctx.db.delete(answer._id);
+      }
+      // Delete the question
+      await ctx.db.delete(question._id);
+    }
+
+    // Get all sessions for this quiz
+    const sessions = await ctx.db
+      .query('sessions')
+      .filter((q) => q.eq(q.field('quizId'), args.quizId))
+      .collect();
+
+    // Delete all participants and responses for each session
+    for (const session of sessions) {
+      // Get all responses for this session (delete by session to ensure we get all)
+      const allResponses = await ctx.db
+        .query('responses')
+        .filter((q) => q.eq(q.field('sessionId'), session._id))
+        .collect();
+      for (const response of allResponses) {
+        await ctx.db.delete(response._id);
+      }
+
+      // Get all participants for this session
+      const participants = await ctx.db
+        .query('participants')
+        .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+        .collect();
+
+      // Delete all participants
+      for (const participant of participants) {
+        await ctx.db.delete(participant._id);
+      }
+
+      // Delete the session
+      await ctx.db.delete(session._id);
+    }
+
+    // Finally, delete the quiz itself
+    await ctx.db.delete(args.quizId);
+
+    return null;
   },
 });
 

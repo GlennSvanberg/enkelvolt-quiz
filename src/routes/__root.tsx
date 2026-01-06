@@ -20,6 +20,14 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: appCssUrl },
       { rel: 'icon', href: '/favicon.ico' },
     ],
+    scripts: [
+      {
+        src: 'https://www.trackaton.com/track.js',
+        'data-website-id': 'jd7e3ygp3x5wd1yhjhspqqtj2x7ypkjy',
+        'data-endpoint': 'https://resolute-orca-949.convex.site/api/e',
+        async: true,
+      },
+    ],
   }),
   component: RootComponent,
   notFoundComponent: () => <div>Not Found</div>,

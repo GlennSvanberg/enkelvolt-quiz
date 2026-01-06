@@ -1,23 +1,21 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState, useRef, useEffect } from 'react';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation } from 'convex/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
-import { api } from '../../../convex/_generated/api';
-import type { Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../../convex/_generated/api';
+import type { Id } from '../../../../convex/_generated/dataModel';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { X, Image as ImageIcon, Music, ChevronLeft, ChevronRight } from 'lucide-react';
 
-export const Route = createFileRoute('/quizzes/create')({
-  component: CreateQuiz,
-  loader: async ({ context, search }) => {
+export const Route = createFileRoute('/quizzes/$quizId/edit')({
+  component: EditQuiz,
+  loader: async ({ context, params }) => {
     const { queryClient } = context as { queryClient: any };
-    if ((search as any)?.edit) {
-      await queryClient.ensureQueryData(
-        convexQuery(api.quizzes.getQuiz, { quizId: (search as any).edit as any }),
-      );
-    }
+    await queryClient.ensureQueryData(
+      convexQuery(api.quizzes.getQuiz, { quizId: params.quizId as any }),
+    );
   },
 });
 
@@ -32,21 +30,17 @@ interface Question {
 
 type WizardStep = 'details' | 'questions' | 'review';
 
-function CreateQuiz() {
+function EditQuiz() {
+  const { quizId } = Route.useParams();
   const navigate = useNavigate();
-  const search = Route.useSearch();
-  const quizIdToEdit = (search as any)?.edit;
-  const createQuiz = useMutation(api.quizzes.createQuiz);
   const updateQuiz = useMutation(api.quizzes.updateQuiz);
   const generateUploadUrl = useMutation(api.quizzes.generateUploadUrl);
 
-  const quizToEdit = useQuery(
-    api.quizzes.getQuiz,
-    quizIdToEdit ? { quizId: quizIdToEdit as any } : 'skip',
+  const { data: quiz } = useSuspenseQuery(
+    convexQuery(api.quizzes.getQuiz, { quizId: quizId as any }),
   );
 
-  const isEditMode = !!quizIdToEdit;
-
+  // Initialize state from quiz data
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<Question[]>([
@@ -65,14 +59,14 @@ function CreateQuiz() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize state from quiz data when editing
+  // Initialize state from quiz data when quiz loads
   useEffect(() => {
-    if (isEditMode && quizToEdit) {
-      setTitle(quizToEdit.title || '');
-      setDescription(quizToEdit.description || '');
-      if (quizToEdit.questions && quizToEdit.questions.length > 0) {
+    if (quiz) {
+      setTitle(quiz.title || '');
+      setDescription(quiz.description || '');
+      if (quiz.questions && quiz.questions.length > 0) {
         setQuestions(
-          quizToEdit.questions.map((q) => ({
+          quiz.questions.map((q) => ({
             text: q.text,
             answers: q.answers.map((a) => ({
               text: a.text,
@@ -86,16 +80,16 @@ function CreateQuiz() {
         );
       }
     }
-  }, [isEditMode, quizToEdit]);
+  }, [quiz]);
 
   // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       questions.forEach((q) => {
-        if (q.imagePreview) {
+        if (q.imagePreview && q.imagePreview.startsWith('blob:')) {
           URL.revokeObjectURL(q.imagePreview);
         }
-        if (q.audioPreview) {
+        if (q.audioPreview && q.audioPreview.startsWith('blob:')) {
           URL.revokeObjectURL(q.audioPreview);
         }
       });
@@ -187,10 +181,7 @@ function CreateQuiz() {
     }
 
     try {
-      console.log('Starting image upload for question', questionIndex);
       const uploadUrl = await generateUploadUrl();
-      console.log('Got upload URL:', uploadUrl);
-      
       const result = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': file.type },
@@ -199,27 +190,19 @@ function CreateQuiz() {
       
       if (!result.ok) {
         const errorText = await result.text();
-        console.error('Upload failed:', result.status, errorText);
         throw new Error(`Upload failed: ${result.status} ${errorText}`);
       }
       
       const responseData = await result.json();
-      console.log('Upload response:', responseData);
-      
-      // Convex storage returns { storageId: "..." }
       const storageId = responseData.storageId;
       if (!storageId) {
-        console.error('No storageId in response:', responseData);
         throw new Error('No storageId in upload response');
       }
-      
-      console.log('Image uploaded successfully, storageId:', storageId);
 
       const newQuestions = [...questions];
       newQuestions[questionIndex].imageStorageId = storageId;
       newQuestions[questionIndex].imagePreview = URL.createObjectURL(file);
       setQuestions(newQuestions);
-      console.log('Updated question with imageStorageId:', storageId);
     } catch (error) {
       console.error('Error uploading image:', error);
       alert('Failed to upload image. Please try again.');
@@ -241,10 +224,7 @@ function CreateQuiz() {
     }
 
     try {
-      console.log('Starting audio upload for question', questionIndex);
       const uploadUrl = await generateUploadUrl();
-      console.log('Got upload URL:', uploadUrl);
-      
       const result = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': file.type },
@@ -253,27 +233,19 @@ function CreateQuiz() {
       
       if (!result.ok) {
         const errorText = await result.text();
-        console.error('Upload failed:', result.status, errorText);
         throw new Error(`Upload failed: ${result.status} ${errorText}`);
       }
       
       const responseData = await result.json();
-      console.log('Upload response:', responseData);
-      
-      // Convex storage returns { storageId: "..." }
       const storageId = responseData.storageId;
       if (!storageId) {
-        console.error('No storageId in response:', responseData);
         throw new Error('No storageId in upload response');
       }
-      
-      console.log('Audio uploaded successfully, storageId:', storageId);
 
       const newQuestions = [...questions];
       newQuestions[questionIndex].audioStorageId = storageId;
       newQuestions[questionIndex].audioPreview = URL.createObjectURL(file);
       setQuestions(newQuestions);
-      console.log('Updated question with audioStorageId:', storageId);
     } catch (error) {
       console.error('Error uploading audio:', error);
       alert('Failed to upload audio. Please try again.');
@@ -282,7 +254,7 @@ function CreateQuiz() {
 
   const handleRemoveImage = (questionIndex: number) => {
     const newQuestions = [...questions];
-    if (newQuestions[questionIndex].imagePreview) {
+    if (newQuestions[questionIndex].imagePreview?.startsWith('blob:')) {
       URL.revokeObjectURL(newQuestions[questionIndex].imagePreview!);
     }
     delete newQuestions[questionIndex].imageStorageId;
@@ -292,7 +264,7 @@ function CreateQuiz() {
 
   const handleRemoveAudio = (questionIndex: number) => {
     const newQuestions = [...questions];
-    if (newQuestions[questionIndex].audioPreview) {
+    if (newQuestions[questionIndex].audioPreview?.startsWith('blob:')) {
       URL.revokeObjectURL(newQuestions[questionIndex].audioPreview!);
     }
     delete newQuestions[questionIndex].audioStorageId;
@@ -381,53 +353,29 @@ function CreateQuiz() {
 
     setIsSubmitting(true);
     try {
-      if (isEditMode && quizIdToEdit) {
-        // Update existing quiz
-        await updateQuiz({
-          quizId: quizIdToEdit as any,
-          title: title.trim(),
-          description: description.trim() || undefined,
-          questions: questions.map((q) => ({
-            text: q.text.trim(),
-            imageStorageId: q.imageStorageId,
-            audioStorageId: q.audioStorageId,
-            answers: q.answers.map((a) => ({
-              text: a.text.trim(),
-              isCorrect: a.isCorrect,
-            })),
+      await updateQuiz({
+        quizId: quizId as any,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        questions: questions.map((q) => ({
+          text: q.text.trim(),
+          imageStorageId: q.imageStorageId,
+          audioStorageId: q.audioStorageId,
+          answers: q.answers.map((a) => ({
+            text: a.text.trim(),
+            isCorrect: a.isCorrect,
           })),
-        });
+        })),
+      });
 
-        navigate({
-          to: '/quizzes/$quizId',
-          params: { quizId: quizIdToEdit } as any,
-          search: {} as any,
-        });
-      } else {
-        // Create new quiz
-        const result = await createQuiz({
-          title: title.trim(),
-          description: description.trim() || undefined,
-          questions: questions.map((q) => ({
-            text: q.text.trim(),
-            imageStorageId: q.imageStorageId,
-            audioStorageId: q.audioStorageId,
-            answers: q.answers.map((a) => ({
-              text: a.text.trim(),
-              isCorrect: a.isCorrect,
-            })),
-          })),
-        });
-
-        navigate({
-          to: '/quizzes/$quizId',
-          params: { quizId: result.quizId } as any,
-          search: {} as any,
-        });
-      }
+      navigate({
+        to: '/quizzes/$quizId',
+        params: { quizId: quizId } as any,
+        search: {} as any,
+      });
     } catch (error) {
-      console.error(`Error ${isEditMode ? 'updating' : 'creating'} quiz:`, error);
-      alert(`Failed to ${isEditMode ? 'update' : 'create'} quiz. Please try again.`);
+      console.error('Error updating quiz:', error);
+      alert('Failed to update quiz. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -438,7 +386,7 @@ function CreateQuiz() {
       <div className="text-center mb-6">
         <h2 className="text-3xl font-bold mb-2">Quiz Details</h2>
         <p className="text-base text-muted-foreground">
-          {isEditMode ? 'Update your quiz title and description' : 'Give your quiz a title and optional description'}
+          Update your quiz title and description
         </p>
       </div>
       <div className="flex flex-col gap-6">
@@ -662,7 +610,7 @@ function CreateQuiz() {
       <div className="text-center mb-6">
         <h2 className="text-3xl font-bold mb-2">Review Quiz</h2>
         <p className="text-base text-muted-foreground">
-          {isEditMode ? 'Review all questions before updating your quiz' : 'Review all questions before creating your quiz'}
+          Review all questions before updating your quiz
         </p>
       </div>
       <div className="flex flex-col gap-6">
@@ -696,15 +644,6 @@ function CreateQuiz() {
                       alt="Question preview"
                       className="w-full h-48 object-cover rounded-lg border-2"
                     />
-                    {question.imageStorageId ? (
-                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                        ✓ Image saved (ID: {question.imageStorageId})
-                      </p>
-                    ) : (
-                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                        ⚠ Image preview exists but storage ID missing!
-                      </p>
-                    )}
                   </div>
                 )}
                 {question.audioPreview && (
@@ -712,15 +651,6 @@ function CreateQuiz() {
                     <div className="flex items-center gap-2 mb-2">
                       <Music className="h-5 w-5" />
                       <span className="text-sm font-medium">Audio</span>
-                      {question.audioStorageId ? (
-                        <span className="text-xs text-green-600 dark:text-green-400">
-                          ✓ Saved
-                        </span>
-                      ) : (
-                        <span className="text-xs text-red-600 dark:text-red-400">
-                          ⚠ Storage ID missing!
-                        </span>
-                      )}
                     </div>
                     <audio src={question.audioPreview} controls className="w-full" />
                   </div>
@@ -749,6 +679,17 @@ function CreateQuiz() {
       </div>
     </div>
   );
+
+  if (!quiz) {
+    return (
+      <div className="p-8 text-center">
+        <p>Quiz not found</p>
+        <Link to="/" className="text-blue-600 underline">
+          Go home
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -863,7 +804,6 @@ function CreateQuiz() {
                 disabled={currentStep === 'details'}
                 variant="outline"
                 className="flex items-center gap-2"
-                trackaton-on-click="wizard-prev"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Previous
@@ -875,7 +815,6 @@ function CreateQuiz() {
                     type="button"
                     onClick={handleAddQuestion}
                     className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-                    trackaton-on-click="wizard-add-question"
                   >
                     + Add Question
                   </Button>
@@ -887,11 +826,8 @@ function CreateQuiz() {
                     disabled={isSubmitting}
                     className="bg-primary hover:bg-primary/90 flex items-center gap-2"
                     size="lg"
-                    trackaton-on-click="wizard-submit-quiz"
                   >
-                    {isSubmitting 
-                      ? (isEditMode ? 'Updating...' : 'Creating...') 
-                      : (isEditMode ? 'Update Quiz' : 'Create Quiz')}
+                    {isSubmitting ? 'Updating...' : 'Update Quiz'}
                   </Button>
                 ) : (
                   <Button
@@ -899,7 +835,6 @@ function CreateQuiz() {
                     onClick={handleNext}
                     className="bg-primary hover:bg-primary/90 flex items-center gap-2"
                     size="lg"
-                    trackaton-on-click="wizard-next"
                   >
                     Next
                     <ChevronRight className="h-4 w-4" />
@@ -913,3 +848,4 @@ function CreateQuiz() {
     </>
   );
 }
+

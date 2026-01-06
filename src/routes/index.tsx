@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
+import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
@@ -12,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card';
-import { Zap, Users, Shield, Sparkles } from 'lucide-react';
+import { Zap, Users, Shield, Sparkles, Pen, Trash2 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
   component: Home,
@@ -21,6 +22,7 @@ export const Route = createFileRoute('/')({
 function Home() {
   const navigate = useNavigate();
   const [quizCode, setQuizCode] = useState('');
+  const deleteQuiz = useMutation(api.quizzes.deleteQuiz);
 
   const { data: quizzes } = useSuspenseQuery(
     convexQuery(api.quizzes.listQuizzes, {}),
@@ -34,6 +36,20 @@ function Home() {
         params: { code: quizCode.trim().toUpperCase() } as any,
         search: {} as any,
       });
+    }
+  };
+
+  const handleDeleteQuiz = async (quizId: string, quizTitle: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (window.confirm(`Are you sure you want to delete "${quizTitle}"? This action cannot be undone.`)) {
+      try {
+        await deleteQuiz({ quizId: quizId as any });
+      } catch (error) {
+        console.error('Error deleting quiz:', error);
+        alert('Failed to delete quiz. Please try again.');
+      }
     }
   };
 
@@ -87,6 +103,7 @@ function Home() {
                   asChild
                   size="lg"
                   className="flex-1 text-lg h-14 bg-primary hover:bg-primary/90"
+                  trackaton-on-click="hero-create-quiz"
                 >
                   <Link to="/quizzes/create">Create Quiz</Link>
                 </Button>
@@ -94,6 +111,7 @@ function Home() {
                   size="lg"
                   variant="secondary"
                   className="flex-1 text-lg h-14"
+                  trackaton-on-click="hero-join-quiz-scroll"
                   onClick={() => {
                     document
                       .getElementById('join-quiz')
@@ -183,6 +201,7 @@ function Home() {
                       type="submit"
                       size="lg"
                       className="px-8 text-lg h-auto bg-primary hover:bg-primary/90"
+                      trackaton-on-click="join-quiz-submit"
                     >
                       Join
                     </Button>
@@ -203,7 +222,7 @@ function Home() {
                   Browse and play quizzes created by the community
                 </p>
               </div>
-              <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
+              <Button asChild size="lg" className="bg-primary hover:bg-primary/90" trackaton-on-click="quiz-list-create-new">
                 <Link to="/quizzes/create">Create New Quiz</Link>
               </Button>
             </div>
@@ -224,30 +243,61 @@ function Home() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {quizzes.map((quiz) => (
-                  <Link
-                    key={quiz._id}
-                    to="/quizzes/$quizId"
-                    params={{ quizId: quiz._id }}
-                  >
-                    <Card className="h-full border-2 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer group">
-                      <CardHeader>
-                        <CardTitle className="group-hover:text-primary transition-colors">
-                          {quiz.title}
-                        </CardTitle>
-                        {quiz.description && (
-                          <CardDescription className="line-clamp-2">
-                            {quiz.description}
-                          </CardDescription>
-                        )}
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">
-                          Created{' '}
-                          {new Date(quiz.createdAt).toLocaleDateString()}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  <div key={quiz._id} className="relative">
+                    <Link
+                      to="/quizzes/$quizId"
+                      params={{ quizId: quiz._id }}
+                      trackaton-on-click="quiz-card-view"
+                    >
+                      <Card className="h-full border-2 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer group">
+                        <CardHeader>
+                          <CardTitle className="group-hover:text-primary transition-colors">
+                            {quiz.title}
+                          </CardTitle>
+                          {quiz.description && (
+                            <CardDescription className="line-clamp-2">
+                              {quiz.description}
+                            </CardDescription>
+                          )}
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-muted-foreground">
+                            Created{' '}
+                            {new Date(quiz.createdAt).toLocaleDateString()}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                    <div className="absolute top-2 right-2 z-10 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-primary/10 hover:text-primary transition-colors"
+                        title="Edit quiz"
+                        trackaton-on-click="quiz-card-edit"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigate({
+                            to: '/quizzes/create',
+                            search: { edit: quiz._id } as any,
+                          });
+                        }}
+                      >
+                        <Pen className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        title="Delete quiz"
+                        trackaton-on-click="quiz-card-delete"
+                        onClick={(e) => handleDeleteQuiz(quiz._id, quiz.title, e)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

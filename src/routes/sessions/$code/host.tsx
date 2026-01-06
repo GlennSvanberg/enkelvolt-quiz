@@ -7,7 +7,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Button } from '~/components/ui/button';
 import { Leaderboard } from '~/components/Leaderboard';
 import { ThemeToggle } from '~/components/ThemeToggle';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   User,
@@ -84,6 +84,14 @@ function HostView() {
     }>
   >([]);
   const [progressBarBounce, setProgressBarBounce] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volumePopoverPosition, setVolumePopoverPosition] = useState({ top: 0, left: 0 });
+  const volumeButtonRef = useRef<HTMLDivElement>(null);
   const previousResponseIds = useRef<Set<string>>(new Set());
   const progressBarRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -173,22 +181,113 @@ function HostView() {
       console.log('Attempting to play audio:', currentQuestion.audioUrl);
       // Reset audio to start from beginning
       audioRef.current.currentTime = 0;
+      setCurrentTime(0);
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
             console.log('Audio playing successfully');
+            setIsPlaying(true);
           })
           .catch((error) => {
             console.error('Error playing audio (autoplay may be blocked):', error);
+            setIsPlaying(false);
             // Autoplay was prevented - this is expected in some browsers
             // The user can manually interact to play audio if needed
           });
       }
     } else if (currentQuestion && session?.status === 'active' && !currentQuestion.audioUrl) {
       console.log('No audio URL for current question');
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
     }
   }, [currentQuestion?.audioUrl, currentQuestion?._id, session?.status]);
+
+  // Sync audio state with audio element events
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => setIsPlaying(false);
+
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [currentQuestion?.audioUrl]);
+
+  // Update volume when it changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+  }, [volume, isMuted]);
+
+  // Track audio time and duration
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
+    const handleDurationChange = () => {
+      setDuration(audio.duration);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('durationchange', handleDurationChange);
+
+    // Initialize duration if already loaded
+    if (audio.duration) {
+      setDuration(audio.duration);
+    }
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('durationchange', handleDurationChange);
+    };
+  }, [currentQuestion?.audioUrl]);
+
+  // Close volume slider when clicking outside
+  useEffect(() => {
+    if (!showVolumeSlider) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        volumeButtonRef.current &&
+        !volumeButtonRef.current.contains(target)
+      ) {
+        setShowVolumeSlider(false);
+      }
+    };
+
+    // Use setTimeout to avoid immediate closure on button click
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showVolumeSlider]);
 
   // Log image URL for debugging
   useEffect(() => {
@@ -256,6 +355,59 @@ function HostView() {
       console.error('Error moving to next question:', error);
       alert('Failed to move to next question');
     }
+  };
+
+  const handlePlayPause = () => {
+    if (!audioRef.current || !currentQuestion?.audioUrl) return;
+    
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch((error) => {
+        console.error('Error playing audio:', error);
+      });
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    setIsMuted(false);
+  };
+
+  const handleMuteToggle = () => {
+    setIsMuted(!isMuted);
+  };
+
+  const handleVolumeIconClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    // Position popover so bottom aligns with top of button
+    // Slider height is 128px (rotated width) + 16px padding (8px top + 8px bottom on outer container)
+    const sliderHeight = 128;
+    const padding = 16; // 8px top + 8px bottom
+    // Calculate button center for horizontal centering - use the actual button element
+    const buttonCenterX = rect.left + rect.width / 2;
+    setVolumePopoverPosition({
+      top: rect.top - sliderHeight - padding, // Position above the button
+      left: buttonCenterX, // Center horizontally on button (will use transform to center)
+    });
+    setShowVolumeSlider((prev) => !prev);
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!audioRef.current) return;
+    const newTime = parseFloat(e.target.value);
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
+  const formatTime = (seconds: number): string => {
+    if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
 
@@ -358,6 +510,7 @@ function HostView() {
                   size="icon"
                   className="cursor-pointer h-7 w-7 shrink-0"
                   aria-label={copied ? 'Copied!' : 'Copy code'}
+                  trackaton-on-click="host-copy-session-code"
                 >
                   {copied ? (
                     <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -392,6 +545,7 @@ function HostView() {
                   <Button
                     onClick={handleShowResults}
                     className="bg-blue-500 text-white hover:bg-blue-600 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg cursor-pointer shadow-lg shadow-blue-500/50 hover:shadow-xl transition-all shrink-0 whitespace-nowrap"
+                    trackaton-on-click="host-show-results"
                   >
                     Show Results
                   </Button>
@@ -400,6 +554,7 @@ function HostView() {
                   <Button
                     onClick={handleNextQuestion}
                     className="bg-green-500 text-white hover:bg-green-600 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg cursor-pointer shadow-lg shadow-green-500/50 hover:shadow-xl transition-all shrink-0 whitespace-nowrap"
+                    trackaton-on-click="host-next-question"
                   >
                     {session.currentQuestionIndex < session.questionCount - 1
                       ? 'Next Question'
@@ -548,6 +703,7 @@ function HostView() {
                   <Button
                     onClick={handleStart}
                     className="bg-green-500 text-white hover:bg-green-600 px-8 sm:px-12 py-4 sm:py-6 text-lg sm:text-xl font-bold rounded-2xl cursor-pointer shadow-lg shadow-green-500/50 hover:shadow-xl transition-all"
+                    trackaton-on-click="host-start-quiz"
                   >
                     Start Quiz
                   </Button>
@@ -560,16 +716,18 @@ function HostView() {
             <div className="flex-1 flex flex-col overflow-hidden relative z-10">
               {/* Audio Element */}
               {currentQuestion.audioUrl && (
-                <audio
-                  ref={audioRef}
-                  src={currentQuestion.audioUrl}
-                  preload="auto"
-                  autoPlay
-                  className="hidden"
-                  onError={(e) => {
-                    console.error('Audio playback error:', e);
-                  }}
-                />
+                <>
+                  <audio
+                    ref={audioRef}
+                    src={currentQuestion.audioUrl}
+                    preload="auto"
+                    autoPlay
+                    className="hidden"
+                    onError={(e) => {
+                      console.error('Audio playback error:', e);
+                    }}
+                  />
+                </>
               )}
 
               {/* Image + Question Section - Image extends down to question, question overlaid at bottom */}
@@ -609,6 +767,105 @@ function HostView() {
               {/* Answer Responses Grid - Bottom (no image behind) */}
               <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden relative z-10">
                 <div className="max-w-4xl mx-auto h-full flex flex-col">
+                  {/* Timeline - Above Answer Alternatives */}
+                  {currentQuestion.audioUrl && (
+                    <div className="mb-3 sm:mb-4 flex items-center gap-3 relative">
+                      <Button
+                        onClick={handlePlayPause}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
+                        aria-label={isPlaying ? 'Pause' : 'Play'}
+                      >
+                        {isPlaying ? (
+                          <Pause className="h-4 w-4 sm:h-5 sm:w-5" />
+                        ) : (
+                          <Play className="h-4 w-4 sm:h-5 sm:w-5" />
+                        )}
+                      </Button>
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-mono shrink-0 min-w-[40px] sm:min-w-[45px]">
+                          {formatTime(currentTime)}
+                        </span>
+                        <div className="flex-1 relative min-w-0">
+                          <input
+                            type="range"
+                            min="0"
+                            max={duration || 0}
+                            step="0.1"
+                            value={currentTime}
+                            onChange={handleSeek}
+                            className="w-full h-2.5 sm:h-3 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer accent-blue-500 min-w-0"
+                            style={{
+                              background: `linear-gradient(to right, rgb(59, 130, 246) 0%, rgb(59, 130, 246) ${duration ? (currentTime / duration) * 100 : 0}%, rgb(229, 231, 235) ${duration ? (currentTime / duration) * 100 : 0}%, rgb(229, 231, 235) 100%)`
+                            }}
+                            aria-label="Audio timeline"
+                          />
+                        </div>
+                        <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-mono shrink-0 min-w-[40px] sm:min-w-[45px]">
+                          {formatTime(duration)}
+                        </span>
+                      </div>
+                      {/* Volume Icon and Slider */}
+                      <div className="relative shrink-0" ref={volumeButtonRef}>
+                        <Button
+                          onClick={handleVolumeIconClick}
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
+                          aria-label={isMuted ? 'Unmute' : 'Mute'}
+                        >
+                          {isMuted ? (
+                            <VolumeX className="h-4 w-4 sm:h-5 sm:w-5" />
+                          ) : (
+                            <Volume2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Volume Slider Popover - Fixed positioning to escape overflow */}
+                  {showVolumeSlider && (
+                    <div 
+                      className="fixed z-[100]"
+                      style={{
+                        top: `${volumePopoverPosition.top}px`,
+                        left: `${volumePopoverPosition.left}px`,
+                        transform: 'translateX(-50%)',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div 
+                        className="flex items-center justify-center"
+                        style={{
+                          padding: '8px 4px',
+                        }}
+                      >
+                        <div 
+                          style={{
+                            width: '128px',
+                            height: '8px',
+                            transform: 'rotate(-90deg)',
+                            transformOrigin: 'center',
+                          }}
+                        >
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={isMuted ? 0 : volume}
+                            onChange={handleVolumeChange}
+                            className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer accent-blue-500"
+                            style={{
+                              background: `linear-gradient(to right, rgb(59, 130, 246) 0%, rgb(59, 130, 246) ${isMuted ? 0 : volume * 100}%, rgb(229, 231, 235) ${isMuted ? 0 : volume * 100}%, rgb(229, 231, 235) 100%)`,
+                            }}
+                            aria-label="Volume"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 auto-rows-fr min-h-0">
                     {currentQuestion.answers.map((answer, index) => {
                       const colors = kahootColors[index % kahootColors.length];
