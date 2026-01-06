@@ -1,27 +1,27 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { Link, createFileRoute } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
 import { useMutation, useQuery } from 'convex/react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  Crown,
+  Flame,
+  Gamepad2,
+  Heart,
+  Music,
+  Rocket,
+  Shield,
+  Sparkles,
+  Star,
+  Trophy,
+  User,
+  Zap,
+  type LucideIcon
+} from 'lucide-react';
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
-import { useState, useEffect, useRef } from 'react';
 import { Button } from '~/components/ui/button';
 import { ThemeToggle } from '~/components/ThemeToggle';
-import {
-  User,
-  Star,
-  Heart,
-  Zap,
-  Trophy,
-  Crown,
-  Rocket,
-  Gamepad2,
-  Music,
-  Sparkles,
-  Flame,
-  Shield,
-  type LucideIcon,
-} from 'lucide-react';
 
 export const Route = createFileRoute('/sessions/$code/play')({
   component: ParticipantView,
@@ -33,7 +33,7 @@ export const Route = createFileRoute('/sessions/$code/play')({
   },
 });
 
-const AVATAR_OPTIONS: { name: string; icon: LucideIcon }[] = [
+const AVATAR_OPTIONS: Array<{ name: string; icon: LucideIcon }> = [
   { name: 'user', icon: User },
   { name: 'star', icon: Star },
   { name: 'heart', icon: Heart },
@@ -87,7 +87,7 @@ function ParticipantView() {
     api.quizzes.getParticipantResponses,
     participantId && session
       ? {
-          participantId: participantId as Id<'participants'>,
+          participantId: participantId,
           sessionId: session._id,
         }
       : 'skip',
@@ -123,7 +123,6 @@ function ParticipantView() {
   useEffect(() => {
     if (currentQuestion?.audioUrl && audioRef.current) {
       console.log('Attempting to play audio:', currentQuestion.audioUrl);
-      // Reset audio to start from beginning
       audioRef.current.currentTime = 0;
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
@@ -133,8 +132,6 @@ function ParticipantView() {
           })
           .catch((error) => {
             console.error('Error playing audio (autoplay may be blocked):', error);
-            // Autoplay was prevented - this is expected in some browsers
-            // The user can manually interact to play audio if needed
           });
       }
     } else if (currentQuestion && !currentQuestion.audioUrl) {
@@ -183,7 +180,7 @@ function ParticipantView() {
       await submitAnswer({
         sessionId: session._id,
         questionId: currentQuestion._id,
-        participantId: participantId as Id<'participants'>,
+        participantId: participantId,
         answerId: answerId,
       });
       setHasAnswered(true);
@@ -352,7 +349,6 @@ function ParticipantView() {
 
   // Showing results
   if (session.status === 'showing_results') {
-    // Get the participant's answer for the current question
     const myResponseForCurrentQuestion = myResponses?.find(
       (r) => r.questionId === currentQuestion?._id,
     );
@@ -362,7 +358,6 @@ function ParticipantView() {
     const isCorrect = selectedAnswerData?.isCorrect ?? false;
     const selectedAnswerText = selectedAnswerData?.text || '';
 
-    // If question not loaded yet, show loading
     if (!currentQuestion) {
       return (
         <>
@@ -409,14 +404,9 @@ function ParticipantView() {
             }`}
           >
             <div className="max-w-3xl w-full text-center text-white">
-              {/* Icon */}
               <div className="mb-6 sm:mb-8 flex justify-center">
                 <div
-                  className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full ${
-                    isCorrect
-                      ? 'bg-white/20 backdrop-blur-sm'
-                      : 'bg-white/20 backdrop-blur-sm'
-                  } flex items-center justify-center`}
+                  className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center`}
                 >
                   {isCorrect ? (
                     <svg
@@ -450,28 +440,24 @@ function ParticipantView() {
                 </div>
               </div>
 
-              {/* Main message */}
               <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 drop-shadow-lg">
                 {isCorrect
                   ? 'Congratulations!'
                   : 'Oh no!'}
               </h2>
 
-              {/* Sub message */}
               <p className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold mb-2 sm:mb-3 drop-shadow-md">
                 {isCorrect
                   ? 'You answered right!'
                   : `You answered ${selectedAnswerText}`}
               </p>
 
-              {/* Additional info */}
               {!isCorrect && (
                 <p className="text-lg sm:text-xl md:text-2xl opacity-90 mt-4 sm:mt-6 drop-shadow-sm">
                   That wasn't the correct answer
                 </p>
               )}
 
-              {/* Waiting message */}
               <div className="mt-8 sm:mt-10 md:mt-12 pt-6 sm:pt-8 border-t border-white/30">
                 <p className="text-base sm:text-lg md:text-xl opacity-90 drop-shadow-sm">
                   Next question starting soon...
@@ -506,7 +492,6 @@ function ParticipantView() {
     (a) => a._id === selectedAnswer,
   );
 
-  // Kahoot-style colors - vibrant and distinct
   const kahootColors = [
     {
       bg: 'bg-[#4A90E2]', // Blue
@@ -560,7 +545,6 @@ function ParticipantView() {
         </div>
       </header>
       <main className="h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden relative">
-        {/* Audio Element */}
         {currentQuestion.audioUrl && (
           <audio
             ref={audioRef}
@@ -574,7 +558,6 @@ function ParticipantView() {
           />
         )}
 
-        {/* Image Section - Top */}
         {currentQuestion.imageUrl && (
           <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 relative min-h-0">
             <div
@@ -584,7 +567,6 @@ function ParticipantView() {
           </div>
         )}
 
-        {/* Question Text - Below image, closer to alternatives */}
         {currentQuestion.text && (
           <div className="px-3 sm:px-4 py-2 sm:py-3 flex justify-center relative z-10">
             <div className="w-full max-w-4xl">
@@ -597,7 +579,6 @@ function ParticipantView() {
           </div>
         )}
 
-        {/* Answer Grid Section - Bottom */}
         <div className="flex-1 px-3 sm:px-4 pb-3 sm:pb-4 overflow-auto flex items-center justify-center relative z-10">
           {hasAnswered ? (
             <div className="max-w-4xl mx-auto w-full flex items-center justify-center">
@@ -638,7 +619,6 @@ function ParticipantView() {
                         cursor-pointer
                       `}
                     >
-                      {/* Letter indicator */}
                       <div className="absolute top-2 sm:top-3 left-3 sm:left-4">
                         <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
                           <span className="text-base sm:text-lg md:text-xl font-bold">
@@ -647,12 +627,10 @@ function ParticipantView() {
                         </div>
                       </div>
 
-                      {/* Answer text */}
                       <span className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-center px-6 sm:px-8 md:px-10 leading-tight">
                         {answer.text}
                       </span>
 
-                      {/* Hover effect overlay */}
                       <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors rounded-xl sm:rounded-2xl" />
                     </button>
                   );

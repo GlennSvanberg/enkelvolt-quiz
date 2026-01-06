@@ -9,7 +9,7 @@ export interface LeaderboardEntry {
 }
 
 interface LeaderboardProps {
-  entries: LeaderboardEntry[];
+  entries: Array<LeaderboardEntry>;
 }
 
 export function Leaderboard({ entries }: LeaderboardProps) {
@@ -52,7 +52,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
     };
 
     // Animate entries appearing one by one
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
     entries.forEach((_, index) => {
       const timer = setTimeout(() => {
         setVisibleCount(index + 1);

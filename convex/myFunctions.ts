@@ -10,7 +10,7 @@ export const exampleQuery = query({
   returns: v.object({
     message: v.string(),
   }),
-  handler: async (_ctx) => {
+  handler: (_ctx) => {
     return {
       message: 'Hello from Convex!',
     }

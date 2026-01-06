@@ -1,29 +1,34 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { Link, createFileRoute } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
 import { useMutation, useQuery } from 'convex/react';
+import { useEffect, useRef, useState } from 'react';
+import { 
+  Check, 
+  Copy,
+  Crown,
+  Flame,
+  Gamepad2,
+  Heart,
+  Music,
+  Rocket,
+  Shield,
+  Sparkles,
+  Star,
+  Trophy,
+  User,
+  Zap,
+  Play, 
+  Pause, 
+  Volume2, 
+  VolumeX,
+  type LucideIcon 
+} from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../../../../convex/_generated/api';
-import { useEffect, useState, useRef } from 'react';
 import { Button } from '~/components/ui/button';
 import { Leaderboard } from '~/components/Leaderboard';
 import { ThemeToggle } from '~/components/ThemeToggle';
-import { Copy, Check, Play, Pause, Volume2, VolumeX } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import {
-  User,
-  Star,
-  Heart,
-  Zap,
-  Trophy,
-  Crown,
-  Rocket,
-  Gamepad2,
-  Music,
-  Sparkles,
-  Flame,
-  Shield,
-  type LucideIcon,
-} from 'lucide-react';
 
 export const Route = createFileRoute('/sessions/$code/host')({
   component: HostView,
@@ -96,7 +101,7 @@ function HostView() {
   const progressBarRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const avatarIconMap: Record<string, LucideIcon> = {
+  const avatarIconMap: Partial<Record<string, LucideIcon>> = {
     user: User,
     star: Star,
     heart: Heart,
@@ -192,8 +197,6 @@ function HostView() {
           .catch((error) => {
             console.error('Error playing audio (autoplay may be blocked):', error);
             setIsPlaying(false);
-            // Autoplay was prevented - this is expected in some browsers
-            // The user can manually interact to play audio if needed
           });
       }
     } else if (currentQuestion && session?.status === 'active' && !currentQuestion.audioUrl) {
@@ -278,7 +281,6 @@ function HostView() {
       }
     };
 
-    // Use setTimeout to avoid immediate closure on button click
     const timeoutId = setTimeout(() => {
       document.addEventListener('click', handleClickOutside);
     }, 0);
@@ -307,7 +309,6 @@ function HostView() {
   };
 
   const getSessionUrl = () => {
-    // Use VITE_SITE_URL if set, otherwise fall back to window.location.origin
     const baseUrl = 
       (import.meta.env.VITE_SITE_URL as string | undefined) ||
       (typeof window !== 'undefined' ? window.location.origin : '');
@@ -316,7 +317,6 @@ function HostView() {
       return '';
     }
     
-    // Ensure baseUrl doesn't end with a slash
     const cleanBaseUrl = baseUrl.replace(/\/$/, '');
     return `${cleanBaseUrl}/sessions/${code}/play`;
   };
@@ -383,15 +383,12 @@ function HostView() {
     e.stopPropagation();
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
-    // Position popover so bottom aligns with top of button
-    // Slider height is 128px (rotated width) + 16px padding (8px top + 8px bottom on outer container)
     const sliderHeight = 128;
-    const padding = 16; // 8px top + 8px bottom
-    // Calculate button center for horizontal centering - use the actual button element
+    const padding = 16; 
     const buttonCenterX = rect.left + rect.width / 2;
     setVolumePopoverPosition({
-      top: rect.top - sliderHeight - padding, // Position above the button
-      left: buttonCenterX, // Center horizontally on button (will use transform to center)
+      top: rect.top - sliderHeight - padding, 
+      left: buttonCenterX, 
     });
     setShowVolumeSlider((prev) => !prev);
   };
@@ -435,7 +432,6 @@ function HostView() {
   const totalResponses = responses?.length ?? 0;
   const totalParticipants = participants?.length ?? 0;
 
-  // Kahoot-style colors - same as participant view
   const kahootColors = [
     {
       bg: 'bg-[#4A90E2]', // Blue
@@ -730,17 +726,14 @@ function HostView() {
                 </>
               )}
 
-              {/* Image + Question Section - Image extends down to question, question overlaid at bottom */}
+              {/* Image + Question Section */}
               {currentQuestion.imageUrl ? (
                 <div className="flex-1 flex flex-col overflow-hidden relative min-h-0">
-                  {/* Image Background - Extends down to question */}
                   <div
                     className="absolute inset-0 bg-contain bg-center bg-no-repeat z-0"
                     style={{ backgroundImage: `url(${currentQuestion.imageUrl})` }}
                   />
-                  {/* Spacer - Pushes question to bottom */}
                   <div className="flex-1 min-h-0" />
-                  {/* Question Text - Overlaid at bottom of image, aligned with bottom edge */}
                   <div className="px-3 sm:px-4 flex justify-center relative z-10 shrink-0">
                     <div className="w-full max-w-4xl">
                       <div className="bg-background/30 backdrop-blur-sm border-2 rounded-lg rounded-b-none p-4 sm:p-6 pb-4 sm:pb-6 shadow-lg">
@@ -752,7 +745,6 @@ function HostView() {
                   </div>
                 </div>
               ) : (
-                /* Question Text - Centered when no image */
                 <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 relative z-10">
                   <div className="w-full max-w-4xl">
                     <div className="bg-background/30 backdrop-blur-sm border-2 rounded-lg p-4 sm:p-6 shadow-lg">
@@ -764,10 +756,9 @@ function HostView() {
                 </div>
               )}
 
-              {/* Answer Responses Grid - Bottom (no image behind) */}
+              {/* Answer Responses Grid */}
               <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden relative z-10">
                 <div className="max-w-4xl mx-auto h-full flex flex-col">
-                  {/* Timeline - Above Answer Alternatives */}
                   {currentQuestion.audioUrl && (
                     <div className="mb-3 sm:mb-4 flex items-center gap-3 relative">
                       <Button
@@ -806,7 +797,6 @@ function HostView() {
                           {formatTime(duration)}
                         </span>
                       </div>
-                      {/* Volume Icon and Slider */}
                       <div className="relative shrink-0" ref={volumeButtonRef}>
                         <Button
                           onClick={handleVolumeIconClick}
@@ -824,7 +814,6 @@ function HostView() {
                       </div>
                     </div>
                   )}
-                  {/* Volume Slider Popover - Fixed positioning to escape overflow */}
                   {showVolumeSlider && (
                     <div 
                       className="fixed z-[100]"
@@ -881,7 +870,6 @@ function HostView() {
                             relative overflow-hidden flex flex-col min-h-0
                           `}
                         >
-                          {/* Letter indicator */}
                           <div className="absolute top-2 left-3 sm:top-3 sm:left-4">
                             <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
                               <span className="text-xs sm:text-sm md:text-base font-bold">
@@ -890,7 +878,6 @@ function HostView() {
                             </div>
                           </div>
 
-                          {/* Answer text */}
                           <div className="flex-1 min-h-0 flex items-center justify-center">
                             <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold block text-center leading-tight">
                               {answer.text}
@@ -907,7 +894,6 @@ function HostView() {
 
           {session.status === 'showing_results' && currentQuestion && (
             <div className="flex-1 flex flex-col overflow-hidden relative z-10">
-              {/* Image Section - Top */}
               {currentQuestion.imageUrl && (
                 <div className="flex-1 flex items-center justify-center px-3 sm:px-4 py-3 sm:py-4 relative min-h-0">
                   <div
@@ -917,7 +903,6 @@ function HostView() {
                 </div>
               )}
 
-              {/* Question Text - Below image, closer to alternatives */}
               <div className="px-3 sm:px-4 py-2 sm:py-3 flex justify-center relative z-10">
                 <div className="w-full max-w-4xl">
                   <div className="bg-background/30 backdrop-blur-sm border-2 rounded-lg p-4 sm:p-6 shadow-lg">
@@ -928,7 +913,6 @@ function HostView() {
                 </div>
               </div>
 
-              {/* Results Section - Bottom (50% height) */}
               <div className="flex-1 px-3 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4 overflow-hidden relative">
                 <div className="max-w-4xl mx-auto h-full flex flex-col">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 auto-rows-fr min-h-0">
@@ -951,7 +935,6 @@ function HostView() {
                             ${item.isCorrect ? 'ring-4 ring-green-400 ring-offset-2 dark:ring-offset-gray-950' : ''}
                           `}
                         >
-                          {/* Letter indicator */}
                           <div className="absolute top-2 left-3 sm:top-3 sm:left-4">
                             <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
                               <span className="text-xs sm:text-sm md:text-base font-bold">
@@ -960,7 +943,6 @@ function HostView() {
                             </div>
                           </div>
 
-                          {/* Correct answer indicator */}
                           {item.isCorrect && (
                             <div className="absolute top-2 right-3 sm:top-3 sm:right-4">
                               <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-green-400 flex items-center justify-center">
@@ -971,14 +953,12 @@ function HostView() {
                             </div>
                           )}
 
-                          {/* Answer text */}
                           <div className="flex-1 min-h-0 flex items-center justify-center mb-2">
                             <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold block text-center leading-tight">
                               {item.text}
                             </span>
                           </div>
 
-                          {/* Response count and bar */}
                           <div className="mt-auto pt-2">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-base sm:text-lg md:text-xl font-bold">

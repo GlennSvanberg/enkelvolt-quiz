@@ -1,6 +1,14 @@
-import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router';
+import {
+  HeadContent,
+  Outlet,
+  Scripts,
+  createRootRoute,
+  useRouter,
+} from '@tanstack/react-router';
 import appCssUrl from '../styles/app.css?url';
 import type { ReactNode } from 'react';
+import { ClerkProvider } from '@clerk/tanstack-start';
+import { ConvexClerkProvider } from '../providers/ConvexClerkProvider';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -36,8 +44,41 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <Outlet />
+      <AppProviders>
+        <Outlet />
+      </AppProviders>
     </RootDocument>
+  );
+}
+
+function AppProviders({ children }: Readonly<{ children: ReactNode }>) {
+  const router = useRouter();
+  const publishableKey = (import.meta as any).env
+    .VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
+
+  // `src/router.tsx` puts this in `router.options.context`.
+  // We intentionally read it here so Convex + Clerk use the same client instance.
+  const convexClient = (router.options.context as any)?.convexClient as
+    | Parameters<typeof ConvexClerkProvider>[0]['client']
+    | undefined;
+
+  if (!publishableKey) {
+    return (
+      <div style={{ padding: 16 }}>
+        Missing <code>VITE_CLERK_PUBLISHABLE_KEY</code>. Clerk authentication is
+        not configured.
+      </div>
+    );
+  }
+
+  return (
+    <ClerkProvider publishableKey={publishableKey}>
+      {convexClient ? (
+        <ConvexClerkProvider client={convexClient}>{children}</ConvexClerkProvider>
+      ) : (
+        children
+      )}
+    </ClerkProvider>
   );
 }
 

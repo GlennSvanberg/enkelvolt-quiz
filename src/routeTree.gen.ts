@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AnotherPageRouteImport } from './routes/anotherPage'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as QuizzesCreateRouteImport } from './routes/quizzes/create'
@@ -17,6 +18,11 @@ import { Route as SessionsCodePlayRouteImport } from './routes/sessions/$code/pl
 import { Route as SessionsCodeHostRouteImport } from './routes/sessions/$code/host'
 import { Route as QuizzesQuizIdEditRouteImport } from './routes/quizzes/$quizId/edit'
 
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AnotherPageRoute = AnotherPageRouteImport.update({
   id: '/anotherPage',
   path: '/anotherPage',
@@ -56,6 +62,7 @@ const QuizzesQuizIdEditRoute = QuizzesQuizIdEditRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
+  '/sign-in': typeof SignInRoute
   '/quizzes/$quizId': typeof QuizzesQuizIdRouteWithChildren
   '/quizzes/create': typeof QuizzesCreateRoute
   '/quizzes/$quizId/edit': typeof QuizzesQuizIdEditRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
+  '/sign-in': typeof SignInRoute
   '/quizzes/$quizId': typeof QuizzesQuizIdRouteWithChildren
   '/quizzes/create': typeof QuizzesCreateRoute
   '/quizzes/$quizId/edit': typeof QuizzesQuizIdEditRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
+  '/sign-in': typeof SignInRoute
   '/quizzes/$quizId': typeof QuizzesQuizIdRouteWithChildren
   '/quizzes/create': typeof QuizzesCreateRoute
   '/quizzes/$quizId/edit': typeof QuizzesQuizIdEditRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/anotherPage'
+    | '/sign-in'
     | '/quizzes/$quizId'
     | '/quizzes/create'
     | '/quizzes/$quizId/edit'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/anotherPage'
+    | '/sign-in'
     | '/quizzes/$quizId'
     | '/quizzes/create'
     | '/quizzes/$quizId/edit'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/anotherPage'
+    | '/sign-in'
     | '/quizzes/$quizId'
     | '/quizzes/create'
     | '/quizzes/$quizId/edit'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnotherPageRoute: typeof AnotherPageRoute
+  SignInRoute: typeof SignInRoute
   QuizzesQuizIdRoute: typeof QuizzesQuizIdRouteWithChildren
   QuizzesCreateRoute: typeof QuizzesCreateRoute
   SessionsCodeHostRoute: typeof SessionsCodeHostRoute
@@ -122,6 +135,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/anotherPage': {
       id: '/anotherPage'
       path: '/anotherPage'
@@ -189,6 +209,7 @@ const QuizzesQuizIdRouteWithChildren = QuizzesQuizIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnotherPageRoute: AnotherPageRoute,
+  SignInRoute: SignInRoute,
   QuizzesQuizIdRoute: QuizzesQuizIdRouteWithChildren,
   QuizzesCreateRoute: QuizzesCreateRoute,
   SessionsCodeHostRoute: SessionsCodeHostRoute,

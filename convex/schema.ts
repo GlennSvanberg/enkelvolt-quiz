@@ -5,6 +5,7 @@ export default defineSchema({
   quizzes: defineTable({
     title: v.string(),
     description: v.optional(v.string()),
+    ownerId: v.optional(v.string()),
     createdAt: v.number(),
   }),
   questions: defineTable({

@@ -1,8 +1,9 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useRef, useEffect } from 'react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
+import { SignedIn, SignedOut, useAuth } from '@clerk/tanstack-start';
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { Button } from '~/components/ui/button';
@@ -35,6 +36,7 @@ function EditQuiz() {
   const navigate = useNavigate();
   const updateQuiz = useMutation(api.quizzes.updateQuiz);
   const generateUploadUrl = useMutation(api.quizzes.generateUploadUrl);
+  const { userId, isSignedIn } = useAuth();
 
   const { data: quiz } = useSuspenseQuery(
     convexQuery(api.quizzes.getQuiz, { quizId: quizId as any }),
@@ -58,6 +60,8 @@ function EditQuiz() {
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const canEdit = isSignedIn === true && !!quiz?.ownerId && quiz.ownerId === userId;
 
   // Initialize state from quiz data when quiz loads
   useEffect(() => {
@@ -96,7 +100,7 @@ function EditQuiz() {
     };
   }, []);
 
-  const totalSteps = questions.length + 2; // details + questions + review
+  const totalSteps = questions.length + 2; 
   const currentStepNumber = currentStep === 'details' 
     ? 1 
     : currentStep === 'review' 
@@ -680,21 +684,10 @@ function EditQuiz() {
     </div>
   );
 
-  if (!quiz) {
-    return (
-      <div className="p-8 text-center">
-        <p>Quiz not found</p>
-        <Link to="/" className="text-blue-600 underline">
-          Go home
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <>
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
-        <div className="container mx-auto px-4 py-4 flex flex-row justify-between items-center">
+      <SignedOut>
+        <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 flex flex-row justify-between items-center">
           <Link to="/" className="flex items-center gap-3 group">
             <img
               src="/enkelvolt_blue.png"
@@ -706,146 +699,187 @@ function EditQuiz() {
             </span>
           </Link>
           <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="flex flex-col min-h-screen">
-        <section className="relative py-12 px-4 sm:px-6 lg:px-8 overflow-hidden flex-1">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
-          <div className="container mx-auto max-w-5xl relative z-10 flex flex-col min-h-full">
-            {/* Progress Indicator - Bullet Points */}
-            <div className="mb-12">
-              <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
-                {/* Details Step */}
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                      currentStep === 'details'
-                        ? 'bg-primary text-primary-foreground scale-110'
-                        : currentStepNumber > 1
-                        ? 'bg-primary/20 text-primary'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {currentStepNumber > 1 ? '✓' : '1'}
-                  </div>
-                  <span className={`text-sm sm:text-base font-medium hidden sm:block ${
-                    currentStep === 'details' ? 'text-foreground' : 'text-muted-foreground'
-                  }`}>
-                    Details
-                  </span>
-                </div>
-
-                {/* Question Steps */}
-                {questions.map((_, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className={`h-1 w-4 sm:w-8 bg-muted`} />
-                    <div
-                      className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all cursor-pointer hover:scale-110 ${
-                        currentStep === 'questions' && currentQuestionIndex === index
-                          ? 'bg-primary text-primary-foreground scale-110'
-                          : currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index)
-                          ? 'bg-primary/20 text-primary'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                      onClick={() => {
-                        if (currentStepNumber > index + 2) {
-                          handleGoToQuestion(index);
-                        }
-                      }}
-                    >
-                      {currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index) ? '✓' : index + 1}
-                    </div>
-                    <span className={`text-sm sm:text-base font-medium hidden sm:block ${
-                      currentStep === 'questions' && currentQuestionIndex === index ? 'text-foreground' : 'text-muted-foreground'
-                    }`}>
-                      Question {index + 1}
-                    </span>
-                  </div>
-                ))}
-
-                {/* Review Step */}
-                {questions.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div className={`h-1 w-4 sm:w-8 bg-muted`} />
-                    <div
-                      className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                        currentStep === 'review'
-                          ? 'bg-primary text-primary-foreground scale-110'
-                          : currentStepNumber === totalSteps
-                          ? 'bg-primary/20 text-primary'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {currentStepNumber === totalSteps && currentStep !== 'review' ? '✓' : totalSteps}
-                    </div>
-                    <span className={`text-sm sm:text-base font-medium hidden sm:block ${
-                      currentStep === 'review' ? 'text-foreground' : 'text-muted-foreground'
-                    }`}>
-                      Review
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Step Content */}
-            <div className="flex-1 flex items-start justify-center py-4">
-              {currentStep === 'details' && renderDetailsStep()}
-              {currentStep === 'questions' && renderQuestionStep()}
-              {currentStep === 'review' && renderReviewStep()}
-            </div>
-
-            {/* Navigation Buttons */}
-            <div className="flex justify-between items-center mt-6 gap-4 pt-6 border-t border-border">
-              <Button
-                type="button"
-                onClick={handlePrevious}
-                disabled={currentStep === 'details'}
-                variant="outline"
-                className="flex items-center gap-2"
+        </header>
+        <main className="p-8 max-w-xl mx-auto">
+          <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 flex flex-col gap-4 shadow-lg animate-hero-fade-in">
+            <h1 className="text-2xl font-bold">Sign in to edit quizzes</h1>
+            <Button asChild className="bg-primary hover:bg-primary/90">
+              <Link
+                to="/sign-in"
+                search={{ redirect: `/quizzes/${quizId}/edit` } as any}
               >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
-
-              <div className="flex items-center gap-2">
-                {currentStep === 'questions' && (
-                  <Button
-                    type="button"
-                    onClick={handleAddQuestion}
-                    className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    + Add Question
-                  </Button>
-                )}
-                {currentStep === 'review' ? (
-                  <Button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="bg-primary hover:bg-primary/90 flex items-center gap-2"
-                    size="lg"
-                  >
-                    {isSubmitting ? 'Updating...' : 'Update Quiz'}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={handleNext}
-                    className="bg-primary hover:bg-primary/90 flex items-center gap-2"
-                    size="lg"
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
+                Sign in with Google
+              </Link>
+            </Button>
           </div>
-        </section>
-      </main>
+        </main>
+      </SignedOut>
+
+      <SignedIn>
+        {!canEdit ? (
+          <main className="p-8 max-w-xl mx-auto">
+            <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 flex flex-col gap-4 shadow-lg animate-hero-fade-in">
+              <h1 className="text-2xl font-bold">You can’t edit this quiz</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Only the creator can edit their quizzes.
+              </p>
+              <Button asChild variant="outline">
+                <Link to="/quizzes/$quizId" params={{ quizId } as any}>
+                  Back to quiz
+                </Link>
+              </Button>
+            </div>
+          </main>
+        ) : (
+          <>
+            <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 flex flex-row justify-between items-center">
+              <Link to="/" className="flex items-center gap-3 group">
+                <img
+                  src="/enkelvolt_blue.png"
+                  alt="Enkelvolt"
+                  className="h-10 w-10 animate-logo-glow transition-transform group-hover:scale-105"
+                />
+                <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  Enkelvolt
+                </span>
+              </Link>
+              <ThemeToggle />
+            </header>
+
+            <main className="flex flex-col min-h-screen">
+              <section className="relative py-12 px-4 sm:px-6 lg:px-8 overflow-hidden flex-1">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
+                <div className="container mx-auto max-w-5xl relative z-10 flex flex-col min-h-full">
+                  {/* Progress Indicator */}
+                  <div className="mb-12">
+                    <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
+                            currentStep === 'details'
+                              ? 'bg-primary text-primary-foreground scale-110'
+                              : currentStepNumber > 1
+                              ? 'bg-primary/20 text-primary'
+                              : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {currentStepNumber > 1 ? '✓' : '1'}
+                        </div>
+                        <span className={`text-sm sm:text-base font-medium hidden sm:block ${
+                          currentStep === 'details' ? 'text-foreground' : 'text-muted-foreground'
+                        }`}>
+                          Details
+                        </span>
+                      </div>
+
+                      {questions.map((_, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <div className={`h-1 w-4 sm:w-8 bg-muted`} />
+                          <div
+                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all cursor-pointer hover:scale-110 ${
+                              currentStep === 'questions' && currentQuestionIndex === index
+                                ? 'bg-primary text-primary-foreground scale-110'
+                                : currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index)
+                                ? 'bg-primary/20 text-primary'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                            onClick={() => {
+                              if (currentStepNumber > index + 2 || currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index)) {
+                                handleGoToQuestion(index);
+                              }
+                            }}
+                          >
+                            {currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index) ? '✓' : index + 1}
+                          </div>
+                          <span className={`text-sm sm:text-base font-medium hidden sm:block ${
+                            currentStep === 'questions' && currentQuestionIndex === index ? 'text-foreground' : 'text-muted-foreground'
+                          }`}>
+                            Question {index + 1}
+                          </span>
+                        </div>
+                      ))}
+
+                      {questions.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className={`h-1 w-4 sm:w-8 bg-muted`} />
+                          <div
+                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
+                              currentStep === 'review'
+                                ? 'bg-primary text-primary-foreground scale-110'
+                                : currentStepNumber === totalSteps
+                                ? 'bg-primary/20 text-primary'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {currentStepNumber === totalSteps && currentStep !== 'review' ? '✓' : totalSteps}
+                          </div>
+                          <span className={`text-sm sm:text-base font-medium hidden sm:block ${
+                            currentStep === 'review' ? 'text-foreground' : 'text-muted-foreground'
+                          }`}>
+                            Review
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex items-start justify-center py-4">
+                    {currentStep === 'details' && renderDetailsStep()}
+                    {currentStep === 'questions' && renderQuestionStep()}
+                    {currentStep === 'review' && renderReviewStep()}
+                  </div>
+
+                  <div className="flex justify-between items-center mt-6 gap-4 pt-6 border-t border-border">
+                    <Button
+                      type="button"
+                      onClick={handlePrevious}
+                      disabled={currentStep === 'details'}
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      {currentStep === 'questions' && (
+                        <Button
+                          type="button"
+                          onClick={handleAddQuestion}
+                          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          + Add Question
+                        </Button>
+                      )}
+                      {currentStep === 'review' ? (
+                        <Button
+                          type="button"
+                          onClick={handleSubmit}
+                          disabled={isSubmitting}
+                          className="bg-primary hover:bg-primary/90 flex items-center gap-2"
+                          size="lg"
+                        >
+                          {isSubmitting ? 'Updating...' : 'Update Quiz'}
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          onClick={handleNext}
+                          className="bg-primary hover:bg-primary/90 flex items-center gap-2"
+                          size="lg"
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </main>
+          </>
+        )}
+      </SignedIn>
     </>
   );
 }
-

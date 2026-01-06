@@ -1,8 +1,9 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { convexQuery } from '@convex-dev/react-query';
+import { SignedIn, SignedOut } from '@clerk/tanstack-start';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { Button } from '~/components/ui/button';
@@ -49,7 +50,7 @@ function CreateQuiz() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [questions, setQuestions] = useState<Question[]>([
+  const [questions, setQuestions] = useState<Array<Question>>([
     {
       text: '',
       answers: [
@@ -206,7 +207,6 @@ function CreateQuiz() {
       const responseData = await result.json();
       console.log('Upload response:', responseData);
       
-      // Convex storage returns { storageId: "..." }
       const storageId = responseData.storageId;
       if (!storageId) {
         console.error('No storageId in response:', responseData);
@@ -219,7 +219,6 @@ function CreateQuiz() {
       newQuestions[questionIndex].imageStorageId = storageId;
       newQuestions[questionIndex].imagePreview = URL.createObjectURL(file);
       setQuestions(newQuestions);
-      console.log('Updated question with imageStorageId:', storageId);
     } catch (error) {
       console.error('Error uploading image:', error);
       alert('Failed to upload image. Please try again.');
@@ -260,7 +259,6 @@ function CreateQuiz() {
       const responseData = await result.json();
       console.log('Upload response:', responseData);
       
-      // Convex storage returns { storageId: "..." }
       const storageId = responseData.storageId;
       if (!storageId) {
         console.error('No storageId in response:', responseData);
@@ -273,7 +271,6 @@ function CreateQuiz() {
       newQuestions[questionIndex].audioStorageId = storageId;
       newQuestions[questionIndex].audioPreview = URL.createObjectURL(file);
       setQuestions(newQuestions);
-      console.log('Updated question with audioStorageId:', storageId);
     } catch (error) {
       console.error('Error uploading audio:', error);
       alert('Failed to upload audio. Please try again.');
@@ -382,7 +379,6 @@ function CreateQuiz() {
     setIsSubmitting(true);
     try {
       if (isEditMode && quizIdToEdit) {
-        // Update existing quiz
         await updateQuiz({
           quizId: quizIdToEdit as any,
           title: title.trim(),
@@ -404,7 +400,6 @@ function CreateQuiz() {
           search: {} as any,
         });
       } else {
-        // Create new quiz
         const result = await createQuiz({
           title: title.trim(),
           description: description.trim() || undefined,
@@ -752,8 +747,8 @@ function CreateQuiz() {
 
   return (
     <>
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
-        <div className="container mx-auto px-4 py-4 flex flex-row justify-between items-center">
+      <SignedOut>
+        <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 flex flex-row justify-between items-center">
           <Link to="/" className="flex items-center gap-3 group">
             <img
               src="/enkelvolt_blue.png"
@@ -765,151 +760,180 @@ function CreateQuiz() {
             </span>
           </Link>
           <ThemeToggle />
-        </div>
-      </header>
+        </header>
+        <main className="p-8 max-w-xl mx-auto">
+          <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 flex flex-col gap-4 shadow-lg animate-hero-fade-in">
+            <h1 className="text-2xl font-bold">Sign in to create quizzes</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Playing quizzes doesn’t require an account, but creating and editing does.
+            </p>
+            <Button asChild className="bg-primary hover:bg-primary/90">
+              <Link to="/sign-in" search={{ redirect: '/quizzes/create' } as any}>
+                Sign in with Google
+              </Link>
+            </Button>
+          </div>
+        </main>
+      </SignedOut>
 
-      <main className="flex flex-col min-h-screen">
-        <section className="relative py-12 px-4 sm:px-6 lg:px-8 overflow-hidden flex-1">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
-          <div className="container mx-auto max-w-5xl relative z-10 flex flex-col min-h-full">
-            {/* Progress Indicator - Bullet Points */}
-            <div className="mb-12">
-              <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
-                {/* Details Step */}
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                      currentStep === 'details'
-                        ? 'bg-primary text-primary-foreground scale-110'
-                        : currentStepNumber > 1
-                        ? 'bg-primary/20 text-primary'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {currentStepNumber > 1 ? '✓' : '1'}
-                  </div>
-                  <span className={`text-sm sm:text-base font-medium hidden sm:block ${
-                    currentStep === 'details' ? 'text-foreground' : 'text-muted-foreground'
-                  }`}>
-                    Details
-                  </span>
-                </div>
+      <SignedIn>
+        <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 flex flex-row justify-between items-center">
+          <Link to="/" className="flex items-center gap-3 group">
+            <img
+              src="/enkelvolt_blue.png"
+              alt="Enkelvolt"
+              className="h-10 w-10 animate-logo-glow transition-transform group-hover:scale-105"
+            />
+            <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              Enkelvolt
+            </span>
+          </Link>
+          <ThemeToggle />
+        </header>
 
-                {/* Question Steps */}
-                {questions.map((_, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className={`h-1 w-4 sm:w-8 bg-muted`} />
-                    <div
-                      className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all cursor-pointer hover:scale-110 ${
-                        currentStep === 'questions' && currentQuestionIndex === index
-                          ? 'bg-primary text-primary-foreground scale-110'
-                          : currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index)
-                          ? 'bg-primary/20 text-primary'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                      onClick={() => {
-                        if (currentStepNumber > index + 2) {
-                          handleGoToQuestion(index);
-                        }
-                      }}
-                    >
-                      {currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index) ? '✓' : index + 1}
-                    </div>
-                    <span className={`text-sm sm:text-base font-medium hidden sm:block ${
-                      currentStep === 'questions' && currentQuestionIndex === index ? 'text-foreground' : 'text-muted-foreground'
-                    }`}>
-                      Question {index + 1}
-                    </span>
-                  </div>
-                ))}
-
-                {/* Review Step */}
-                {questions.length > 0 && (
+        <main className="flex flex-col min-h-screen">
+          <section className="relative py-12 px-4 sm:px-6 lg:px-8 overflow-hidden flex-1">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
+            <div className="container mx-auto max-w-5xl relative z-10 flex flex-col min-h-full">
+              {/* Progress Indicator */}
+              <div className="mb-12">
+                <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
+                  {/* Details Step */}
                   <div className="flex items-center gap-2">
-                    <div className={`h-1 w-4 sm:w-8 bg-muted`} />
                     <div
                       className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                        currentStep === 'review'
+                        currentStep === 'details'
                           ? 'bg-primary text-primary-foreground scale-110'
-                          : currentStepNumber === totalSteps
+                          : currentStepNumber > 1
                           ? 'bg-primary/20 text-primary'
                           : 'bg-muted text-muted-foreground'
                       }`}
                     >
-                      {currentStepNumber === totalSteps && currentStep !== 'review' ? '✓' : totalSteps}
+                      {currentStepNumber > 1 ? '✓' : '1'}
                     </div>
                     <span className={`text-sm sm:text-base font-medium hidden sm:block ${
-                      currentStep === 'review' ? 'text-foreground' : 'text-muted-foreground'
+                      currentStep === 'details' ? 'text-foreground' : 'text-muted-foreground'
                     }`}>
-                      Review
+                      Details
                     </span>
                   </div>
-                )}
+
+                  {/* Question Steps */}
+                  {questions.map((_, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className={`h-1 w-4 sm:w-8 bg-muted`} />
+                      <div
+                        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all cursor-pointer hover:scale-110 ${
+                          currentStep === 'questions' && currentQuestionIndex === index
+                            ? 'bg-primary text-primary-foreground scale-110'
+                            : currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index)
+                            ? 'bg-primary/20 text-primary'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                        onClick={() => {
+                          if (currentStepNumber > index + 2 || currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index)) {
+                            handleGoToQuestion(index);
+                          }
+                        }}
+                      >
+                        {currentStep === 'review' || (currentStep === 'questions' && currentQuestionIndex > index) ? '✓' : index + 1}
+                      </div>
+                      <span className={`text-sm sm:text-base font-medium hidden sm:block ${
+                        currentStep === 'questions' && currentQuestionIndex === index ? 'text-foreground' : 'text-muted-foreground'
+                      }`}>
+                        Question {index + 1}
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* Review Step */}
+                  {questions.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className={`h-1 w-4 sm:w-8 bg-muted`} />
+                      <div
+                        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
+                          currentStep === 'review'
+                            ? 'bg-primary text-primary-foreground scale-110'
+                            : currentStepNumber === totalSteps
+                            ? 'bg-primary/20 text-primary'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {currentStepNumber === totalSteps && currentStep !== 'review' ? '✓' : totalSteps}
+                      </div>
+                      <span className={`text-sm sm:text-base font-medium hidden sm:block ${
+                        currentStep === 'review' ? 'text-foreground' : 'text-muted-foreground'
+                      }`}>
+                        Review
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step Content */}
+              <div className="flex-1 flex items-start justify-center py-4">
+                {currentStep === 'details' && renderDetailsStep()}
+                {currentStep === 'questions' && renderQuestionStep()}
+                {currentStep === 'review' && renderReviewStep()}
+              </div>
+
+              {/* Navigation Buttons */}
+              <div className="flex justify-between items-center mt-6 gap-4 pt-6 border-t border-border">
+                <Button
+                  type="button"
+                  onClick={handlePrevious}
+                  disabled={currentStep === 'details'}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  trackaton-on-click="wizard-prev"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  {currentStep === 'questions' && (
+                    <Button
+                      type="button"
+                      onClick={handleAddQuestion}
+                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+                      trackaton-on-click="wizard-add-question"
+                    >
+                      + Add Question
+                    </Button>
+                  )}
+                  {currentStep === 'review' ? (
+                    <Button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={isSubmitting}
+                      className="bg-primary hover:bg-primary/90 flex items-center gap-2"
+                      size="lg"
+                      trackaton-on-click="wizard-submit-quiz"
+                    >
+                      {isSubmitting 
+                        ? (isEditMode ? 'Updating...' : 'Creating...') 
+                        : (isEditMode ? 'Update Quiz' : 'Create Quiz')}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={handleNext}
+                      className="bg-primary hover:bg-primary/90 flex items-center gap-2"
+                      size="lg"
+                      trackaton-on-click="wizard-next"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
-
-            {/* Step Content */}
-            <div className="flex-1 flex items-start justify-center py-4">
-              {currentStep === 'details' && renderDetailsStep()}
-              {currentStep === 'questions' && renderQuestionStep()}
-              {currentStep === 'review' && renderReviewStep()}
-            </div>
-
-            {/* Navigation Buttons */}
-            <div className="flex justify-between items-center mt-6 gap-4 pt-6 border-t border-border">
-              <Button
-                type="button"
-                onClick={handlePrevious}
-                disabled={currentStep === 'details'}
-                variant="outline"
-                className="flex items-center gap-2"
-                trackaton-on-click="wizard-prev"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
-
-              <div className="flex items-center gap-2">
-                {currentStep === 'questions' && (
-                  <Button
-                    type="button"
-                    onClick={handleAddQuestion}
-                    className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-                    trackaton-on-click="wizard-add-question"
-                  >
-                    + Add Question
-                  </Button>
-                )}
-                {currentStep === 'review' ? (
-                  <Button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="bg-primary hover:bg-primary/90 flex items-center gap-2"
-                    size="lg"
-                    trackaton-on-click="wizard-submit-quiz"
-                  >
-                    {isSubmitting 
-                      ? (isEditMode ? 'Updating...' : 'Creating...') 
-                      : (isEditMode ? 'Update Quiz' : 'Create Quiz')}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={handleNext}
-                    className="bg-primary hover:bg-primary/90 flex items-center gap-2"
-                    size="lg"
-                    trackaton-on-click="wizard-next"
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
+          </section>
+        </main>
+      </SignedIn>
     </>
   );
 }
